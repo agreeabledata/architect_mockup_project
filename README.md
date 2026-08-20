@@ -34,10 +34,12 @@ fixed **turn budget** (e.g., 50 turns per run).
 
 ### Battle / combat mechanics (issue #1)
 
-- v1 spec ("Single Battle Rules — Coin-Powered"): a fixed-turn duel — agent
-  50 HP vs. opponent 100 HP, opponent deals a flat 8 damage per round, agent
-  attack power derived from its coin balance. Fully deterministic, no randomness.
-- Current framing: the battle is a **decision eval**, not a combat-skill eval.
+- v1 spec ("Single Battle Rules — Coin-Powered", by mfeinLearn — see BATTLE.md on
+  the issue): a fixed-turn duel — agent 50 HP with a 10-attack budget vs. opponent
+  100 HP, opponent deals a flat 8 damage per round, agent attack power
+  `max(1, floor(coins / 10))`. Fully deterministic, no randomness.
+- **Proposed reframing (new, not yet reviewed by the spec author):** the battle
+  is a **decision eval**, not a combat-skill eval.
   Because the engine is deterministic, whether the agent *should* fight is
   computable from the visible stats — but the numbers are dressed up as a word
   problem, so the eval measures whether the agent extracts the arithmetic from
@@ -46,10 +48,13 @@ fixed **turn budget** (e.g., 50 turns per run).
 - Open questions: the payout/stake table (entry cost, win reward, loss penalty),
   exactly what the agent observes before choosing to fight, and whether the
   attack-budget rule should bind, be removed, or stay as a deliberate distractor.
+  (The v1 spec marked the 10-attack budget as a final call; the math shows it can
+  never bind at these numbers, which is why it's being reopened here.)
 
 ### Spending coins on battle items
 
-- Instead of attack power reading the agent's raw coin balance, the agent could
+- **New idea (not yet discussed in any issue thread):** instead of attack power
+  reading the agent's raw coin balance, the agent could
   **buy items at a shop** to power up before a battle.
 - This turns battle power into a chosen investment with a real ROI calculation:
   spend X krones on gear to unlock a payout of Y.
@@ -92,7 +97,9 @@ fixed **turn budget** (e.g., 50 turns per run).
 
 ### Model scaffolding & cost tracking (issue #5)
 
-- Direction: a thin provider-agnostic harness, no heavy frameworks. One
+- **Leading option (from review discussion — pending team decision on the
+  issue; a factory pattern with per-provider clients was also proposed and the
+  two largely converge):** a thin provider-agnostic harness, no heavy frameworks. One
   OpenAI-compatible client covers DeepSeek and Ollama (same wire format,
   different base URLs); Anthropic models via the official SDK behind the same
   neutral `chat(messages, tools)` interface returning normalized tool calls,
@@ -103,6 +110,34 @@ fixed **turn budget** (e.g., 50 turns per run).
   metrics: iterations-to-success, success rate, tokens per run, krones per run.
 - A hard per-decision iteration cap is both the main cost control and a natural
   failure condition.
-- Fairness rules: identical prompts, tools, temperature, and caps for every
-  model; one uniform malformed-tool-call policy; full per-run transcripts logged
-  for audit.
+- Fairness rules: identical prompts, tools, and caps for every model, and
+  identical decoding settings where the provider supports them (some current
+  models reject sampling parameters — divergences get logged); one uniform
+  malformed-tool-call policy; full per-run transcripts logged for audit.
+
+### Eval best-practices notes (from a survey of agent benchmarks)
+
+Distilled from published agent evals (BALROG, τ-bench, ARC-AGI-3, TALES,
+GSM-Symbolic) and eval-methodology guidance from Anthropic and METR:
+
+- Report **pass^k** ("succeeds k out of k tries") per quest type alongside mean
+  score — consistency is a separate axis from capability.
+- **Regenerate combat arithmetic from templates per seed** (fresh names and
+  numbers), so no fixed instance can be memorized; spot-check score stability
+  across re-instantiations.
+- Ship a scripted **"lazy baseline" bot** (e.g., always take the cheapest safe
+  quest) and a per-seed **oracle solver**; leaderboard numbers only mean
+  something between those two anchors — a lazy bot scoring near the models
+  means the economy is exploitable.
+- Seed **trap quests** (negative expected krones-per-turn) so declining is
+  sometimes the correct move and decision quality is scored, not just execution.
+- Let models emit **free-text reasoning before the structured action** — never
+  demand schema-first output (format constraints measurably degrade reasoning,
+  especially for small local models).
+- Report **malformed-action rate per provider** as a first-class metric, to
+  separate harness artifacts from model capability.
+- **Variance-triage rule:** if per-seed variance exceeds a threshold, review
+  transcripts and classify failures before trusting the number.
+- **Hash and log the full eval config** (prompt version, model, decoding
+  settings, seed) into each transcript header, so every result is attributable
+  to (model × prompt-version × seed).
