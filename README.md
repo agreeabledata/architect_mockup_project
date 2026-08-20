@@ -28,11 +28,24 @@ two small interfaces, so they proceed in parallel without blocking each other:
   `chat(messages, tools)` types), the scoring/balance numbers, and later the
   scripted baseline bots that sanity-check quest balance.
 
+**Settled at the 2026-08-20 office hours** (issues #6–#11):
+
+- **Everything is Go, in one monorepo** — engine and harness are packages, not
+  separate repos. Max bootstraps the skeleton first (#6); everything else waits on it.
+- **v1 ships exactly two quest types: combat and the Courier delivery** (#7). The
+  rest land after the first end-to-end run works.
+- **No spending in v1** (#9): krones are both the score and the XP — combat power
+  reads the raw balance, so earning is progression. Metric is final balance.
+- **The turn budget is the agent's lifespan** (#8): every action spends life from a
+  fixed allotment. Cost table still to be set.
+
 **Milestones** (cadence: weekly touchpoints, code review every other Thursday):
 
-1. **Contracts** — agree both interfaces and record the ranking metric
-   (proposed: final balance — identical to total-earned while the game is
-   earn-only, and it stays valid if the item shop lands). One short PR each.
+0. **Repo skeleton** (#6) — Go monorepo, package layout, `go test ./...` passes.
+   Blocks 1 and 2.
+1. **Contracts** — agree both interfaces. The ranking metric is settled: final
+   balance (identical to total-earned while the game is earn-only, and still
+   valid if an item shop ever lands). One short PR each.
 2. **Parallel build** (target: next code review) — the engine plays a scripted
    bot through a battle and one delivery; the harness completes a full
    tool-call round trip against DeepSeek or local Ollama through the stub,
@@ -44,19 +57,25 @@ two small interfaces, so they proceed in parallel without blocking each other:
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step
 checklists; suggested layout `/engine`, `/harness`, `/quests`, `/scripts`.
-Text/data-driven only for now — sprites are a polish pass later.
+Text/data-driven by default; visuals are optional and only if they help the
+author think while coding — if any, 2D with circles and squares plus text labels,
+no art. Engine/framework choice is the engine author's call, with the rationale
+in the PR.
 
 ## Brainstorming
 
-### Run structure: time as a resource
+### Run structure: lifespan as the resource
 
 The eval is structured like an open-world RPG (think World of Warcraft / Skyrim
 questing): the agent receives quests, chooses which to pursue, and acts under a
-fixed **turn budget** (e.g., 50 turns per run).
+fixed **lifespan** (~50 turns, one turn = one in-game day). Framing the budget as
+the agent's life rather than a neutral turn counter makes the opportunity cost
+explicit — taking a quest spends life the agent cannot get back.
 
-- Every action costs turns. Illustrative costs: fighting a battle ~2 turns,
-  picking up a batch of ~5 new quests ~1 turn, delivering a package 2–4 turns
-  depending on distance (longer deliveries pay more).
+- Every action costs days of lifespan. Illustrative costs: fighting a battle ~2,
+  picking up a batch of ~5 new quests ~1, delivering a package 2–4 depending on
+  distance (longer deliveries pay more). Real numbers are still open (#8), including
+  whether combat and delivery simply cost the same in v1.
 - The core eval signal is **opportunity cost**: does the agent make good calls
   about which quests to take, when to acquire more quests vs. execute the ones it
   has, and when a payoff justifies the turns spent.
@@ -75,7 +94,7 @@ fixed **turn budget** (e.g., 50 turns per run).
   the issue): a fixed-turn duel — agent 50 HP with a 10-attack budget vs. opponent
   100 HP, opponent deals a flat 8 damage per round, agent attack power
   `max(1, floor(coins / 10))`. Fully deterministic, no randomness.
-- **Proposed reframing (new, not yet reviewed by the spec author):** the battle
+- **Reframing (agreed 2026-08-20, spec author present):** the battle
   is a **decision eval**, not a combat-skill eval.
   Because the engine is deterministic, whether the agent *should* fight is
   computable from the visible stats — but the numbers are dressed up as a word
@@ -88,10 +107,13 @@ fixed **turn budget** (e.g., 50 turns per run).
   (The v1 spec marked the 10-attack budget as a final call; the math shows it can
   never bind at these numbers, which is why it's being reopened here.)
 
-### Spending coins on battle items
+### Spending coins on battle items — deferred past v1 (#9)
 
-- **New idea (not yet discussed in any issue thread):** instead of attack power
-  reading the agent's raw coin balance, the agent could
+Decided on 2026-08-20: **v1 has no shop and no spending.** Attack power reads the
+raw krone balance, which makes krones double as XP. Revisit after the first
+end-to-end run; the idea as originally written:
+
+- Instead of attack power reading the agent's raw coin balance, the agent could
   **buy items at a shop** to power up before a battle.
 - This turns battle power into a chosen investment with a real ROI calculation:
   spend X krones on gear to unlock a payout of Y.
@@ -102,6 +124,10 @@ fixed **turn budget** (e.g., 50 turns per run).
   are single-use (single-use is simpler for v1).
 
 ### Non-combat quest challenges (issue #2)
+
+**v1 takes the Courier only** (#7). The Merchant's Bargain is liked but needs an
+objective scoring model before it can be an eval — negotiation is subjective as
+written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
 
 - Four quest writeups: **The Courier's Errand** (timed delivery with package
   condition), **The Merchant's Bargain** (negotiation against a hidden minimum
@@ -126,21 +152,21 @@ fixed **turn budget** (e.g., 50 turns per run).
 - Under the turn economy, krones are already the common unit — the balancing
   question is krones-per-turn across quest types rather than post-hoc
   normalization.
-- Open questions: whether spending exists in v1 (see battle items above — this
-  decides final-balance vs. total-earned as the metric); repeated seeded runs
+- **Settled:** no spending in v1, and the metric is final balance (#9).
+- Open questions: repeated seeded runs
   and reporting variance rather than ranking on a single run; partial credit for
   near-misses vs. a strict zero-for-failure; numeric definitions for "late,"
   "damaged," and timeouts.
 
 ### Model scaffolding & cost tracking (issue #5)
 
-- **Leading option (from review discussion — pending team decision on the
-  issue; a factory pattern with per-provider clients was also proposed and the
-  two largely converge):** a thin provider-agnostic harness, no heavy frameworks. One
-  OpenAI-compatible client covers DeepSeek and Ollama (same wire format,
-  different base URLs); Anthropic models via the official SDK behind the same
+- **Decided (#11):** a thin provider-agnostic harness in Go, no heavy frameworks.
+  One OpenAI-compatible client covers DeepSeek and Ollama — confirmed on the call
+  that Ollama exposes OpenAI-compatible endpoints, so it is one SDK with a
+  different base URL; Anthropic models via the official SDK behind the same
   neutral `chat(messages, tools)` interface returning normalized tool calls,
-  usage, and stop reason.
+  usage, and stop reason. Built against a stub engine so it never waits on the
+  real one.
 - Cost tracking: every call returns normalized token usage; the runner
   accumulates per quest run alongside iteration count and wall time; dollar cost
   from a per-model pricing config (null for local models). Headline efficiency
