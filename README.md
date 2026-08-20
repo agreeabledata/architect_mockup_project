@@ -9,6 +9,43 @@ Work is tracked in GitHub Issues. Design ideas live in the Brainstorming section
 below — **add new ideas directly to this section** (small PRs are fine), and open
 an issue when an idea is ready to be worked on.
 
+## Implementation plan
+
+The brainstorming phase is complete (issues #1–#5, captured below). Implementation
+splits along the **engine/harness seam** — the two workstreams touch only through
+two small interfaces, so they proceed in parallel without blocking each other:
+
+- **Game engine — Malcolm (mfeinLearn).** Pure and deterministic, no LLM code
+  anywhere: the turn ledger, seeded quest board, battle resolver, and the first
+  quest (Courier — deterministic, simplest). Testable end-to-end with scripted
+  bots and unit tests; no API keys needed.
+- **Model harness — Max (maxpeterkaya).** The OpenAI-compatible client
+  (DeepSeek + Ollama via base URL), the agent runner loop, and cost tracking
+  (normalized token usage per run + a pricing config). Developed against a
+  hardcoded stub engine with two fake quests, so it never waits on the real one.
+- **Contracts, scoring & integration — Davis.** The two interface definitions
+  (the engine's `observe / legalActions / apply` surface, and the neutral
+  `chat(messages, tools)` types), the scoring/balance numbers, and later the
+  scripted baseline bots that sanity-check quest balance.
+
+**Milestones** (cadence: weekly touchpoints, code review every other Thursday):
+
+1. **Contracts** — agree both interfaces and record the ranking metric
+   (proposed: final balance — identical to total-earned while the game is
+   earn-only, and it stays valid if the item shop lands). One short PR each.
+2. **Parallel build** (target: next code review) — the engine plays a scripted
+   bot through a battle and one delivery; the harness completes a full
+   tool-call round trip against DeepSeek or local Ollama through the stub,
+   printing the cost record.
+3. **Integration** — first end-to-end 50-turn run with a real model. After
+   that, remaining quests land one per PR (spec the payout formula, turn cost,
+   and tool surface as each is built).
+
+**Process:** small PRs to `main`; apprentices cross-review each other's PRs and
+tag Davis + Marissa; one issue per quest or workstream, with next-step
+checklists; suggested layout `/engine`, `/harness`, `/quests`, `/scripts`.
+Text/data-driven only for now — sprites are a polish pass later.
+
 ## Brainstorming
 
 ### Run structure: time as a resource
