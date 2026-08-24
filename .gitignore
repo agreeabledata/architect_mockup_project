@@ -1,0 +1,5 @@
+.env
+transcripts/
+config.json
+.idea/
+*.local.json
