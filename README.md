@@ -43,9 +43,11 @@ two small interfaces, so they proceed in parallel without blocking each other:
 
 0. **Repo skeleton** (#6) — Go monorepo, package layout, `go test ./...` passes.
    Blocks 1 and 2.
-1. **Contracts** — agree both interfaces. The ranking metric is settled: final
+1. **Contracts** — **done.** `engine/engine.go` is the ratified engine seam
+   (`Observe / LegalActions / Apply`) and `harness/chat.go` the neutral model
+   seam; `engine/balance.go` holds every economy number. Ranking metric is final
    balance (identical to total-earned while the game is earn-only, and still
-   valid if an item shop ever lands). One short PR each.
+   valid if an item shop ever lands). Changes to either seam go through a PR.
 2. **Parallel build** (target: next code review) — the engine plays a scripted
    bot through a battle and one delivery; the harness completes a full
    tool-call round trip against DeepSeek or local Ollama through the stub,
@@ -72,10 +74,19 @@ fixed **lifespan** (~50 turns, one turn = one in-game day). Framing the budget a
 the agent's life rather than a neutral turn counter makes the opportunity cost
 explicit — taking a quest spends life the agent cannot get back.
 
-- Every action costs days of lifespan. Illustrative costs: fighting a battle ~2,
-  picking up a batch of ~5 new quests ~1, delivering a package 2–4 depending on
-  distance (longer deliveries pay more). Real numbers are still open (#8), including
-  whether combat and delivery simply cost the same in v1.
+- Every action costs days of lifespan. **Settled (#8), and the numbers now live in
+  `engine/balance.go` — that file is the only place the economy is defined:**
+  50 days of lifespan, starting balance 0. A battle costs 2 days; a delivery costs
+  its distance, 2–4 days; drawing a fresh board of 5 quests costs 1 day.
+- **Payouts (#8):** deliveries pay 60 / 70 / 100 for short / medium / long, so the
+  short run pays best per day and ordering the board is a real decision. A won
+  battle pays 120 (60/day); a lost one pays 0 and still costs its 2 days. Nothing
+  in v1 has a negative payout, so final balance is exactly total earned (#9).
+- **Combat unlocks at 150 krones** — below that the deterministic duel is
+  unwinnable, so the agent must fund itself on deliveries before it can fight. Once
+  it can, combat pays roughly double a delivery per day, and the limiter is supply:
+  a board holds 5 quests, at most 2 of them battles. The run therefore has a shape —
+  fund up, then farm — that the agent has to work out from the arithmetic.
 - The core eval signal is **opportunity cost**: does the agent make good calls
   about which quests to take, when to acquire more quests vs. execute the ones it
   has, and when a payoff justifies the turns spent.
@@ -101,11 +112,14 @@ explicit — taking a quest spends life the agent cannot get back.
   problem, so the eval measures whether the agent extracts the arithmetic from
   the fiction and fights only when it can win (or when the ROI beats other uses
   of those turns).
-- Open questions: the payout/stake table (entry cost, win reward, loss penalty),
-  exactly what the agent observes before choosing to fight, and whether the
-  attack-budget rule should bind, be removed, or stay as a deliberate distractor.
-  (The v1 spec marked the 10-attack budget as a final call; the math shows it can
-  never bind at these numbers, which is why it's being reopened here.)
+- **Settled:** entry cost 2 days, win pays 120, a loss pays 0 (the wasted days are
+  the penalty — no negative payouts in v1). The agent observes its own balance, its
+  remaining lifespan, and the opponent's HP and damage; the win condition is
+  derivable from those and nothing else. The 10-attack budget **stays in the quest
+  prose as a deliberate distractor but is not implemented** — the agent dies or wins
+  within 7 attacks at these numbers, so tracking it would be dead code.
+  `engine.WinsBattle` and its test pin the 150-krone threshold and assert the budget
+  stays non-binding.
 
 ### Spending coins on battle items — deferred past v1 (#9)
 
