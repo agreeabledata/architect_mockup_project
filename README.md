@@ -166,7 +166,9 @@ written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
   different base URL; Anthropic models via the official SDK behind the same
   neutral `chat(messages, tools)` interface returning normalized tool calls,
   usage, and stop reason. Built against a stub engine so it never waits on the
-  real one.
+  real one. **Confirmed in practice at milestone 2:** no Go Ollama SDK was
+  needed — the OpenAI-compatible client ran the first full tool-call round trip
+  against a local Ollama instance using only `base_url`.
 - Cost tracking: every call returns normalized token usage; the runner
   accumulates per quest run alongside iteration count and wall time; dollar cost
   from a per-model pricing config (null for local models). Headline efficiency
