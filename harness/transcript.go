@@ -62,6 +62,11 @@ func (t *Transcript) Record(messages []Message, res Result) {
 	})
 }
 
+// Path returns the transcript file's path.
+func (t *Transcript) Path() string {
+	return t.f.Name()
+}
+
 // Close flushes and closes the file.
 func (t *Transcript) Close() error {
 	if err := t.w.Flush(); err != nil {

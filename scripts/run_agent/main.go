@@ -45,6 +45,7 @@ func main() {
 	fmt.Printf("wall time     %s\n", report.WallTime)
 	fmt.Printf("cost          $%.4f\n", report.Cost(cfg))
 	fmt.Printf("reason        %s\n", report.Reason)
+	fmt.Printf("transcript    %s\n", tr.Path())
 }
 
 func newProvider(cfg *harness.Config) (harness.Provider, error) {
