@@ -11,9 +11,11 @@ const (
 	StartingBalance = 0
 
 	// Lifespan costs.
-	CostRefreshBoard = 1 // draw a fresh board of quests
-	CostBattle       = 2
+	CostRefreshBoard   = 1 // draw a fresh board of quests
+	CostBattle         = 2
 	CostDeliveryPerLeg = 1 // a delivery's distance is its cost in days
+	MinDeliveryDays    = 2 // shortest posted delivery
+	MaxDeliveryDays    = 4 // longest posted delivery
 
 	// Payouts. Deliveries are 2-4 days; the short one pays best per day, so
 	// ordering the board is a real decision.
@@ -27,15 +29,15 @@ const (
 	// payouts anywhere in v1, so final balance == total earned (issue #9).
 	PayBattleLoss = 0
 
-	QuestsPerBoard    = 5
+	QuestsPerBoard     = 5
 	MaxBattlesPerBoard = 2
 )
 
 // Duel constants (issue #1 spec, coin-powered).
 const (
-	AgentHP           = 50
-	OpponentHP        = 100
-	OpponentDamage    = 8
+	AgentHP        = 50
+	OpponentHP     = 100
+	OpponentDamage = 8
 	// AttackBudget is fiction only: the quest text tells the agent it has 10
 	// attacks. At these numbers the agent dies or wins first, so the engine
 	// does not track it -- it is a distractor in the word problem, not a rule.
