@@ -1,7 +1,7 @@
 // Package engine defines the game surface the agent harness drives.
 //
-// DRAFT: this is the engine/harness seam. The definition is owned by Davis
-// (reviewed in milestone 1); the harness and stub build against it now.
+// RATIFIED 2026-08-27 (milestone 1). This is the engine/harness seam, owned by Davis
+// — changes go through a PR. Economy numbers live in balance.go.
 package engine
 
 import "encoding/json"
