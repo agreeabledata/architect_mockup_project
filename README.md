@@ -48,13 +48,25 @@ two small interfaces, so they proceed in parallel without blocking each other:
    seam; `engine/balance.go` holds every economy number. Ranking metric is final
    balance (identical to total-earned while the game is earn-only, and still
    valid if an item shop ever lands). Changes to either seam go through a PR.
-2. **Parallel build** (target: next code review) — the engine plays a scripted
-   bot through a battle and one delivery; the harness completes a full
-   tool-call round trip against DeepSeek or local Ollama through the stub,
-   printing the cost record.
-3. **Integration** — first end-to-end 50-turn run with a real model. After
-   that, remaining quests land one per PR (spec the payout formula, turn cost,
+2. **Parallel build** — **done.** Engine (#13): headless `engine.Game`, rules in
+   `docs/engine.md`, scripted bot via `go run ./scripts/run_bot -seed 1`.
+   Harness (#11): both clients, agent loop, cost record, stub round trip.
+3. **Integration** — **done 2026-09-02.** First end-to-end 50-day run:
+   `llama3.2:3b` on Ollama, seed 1, 1390 krones in 41 model calls (greedy bot:
+   1650). The model fought at 0 and 70 krones and lost both — the trap works.
+   Next: remaining quests land one per PR (spec the payout formula, day cost,
    and tool surface as each is built).
+
+**Running it:**
+
+```sh
+cp config.example.json config.json   # pick a provider; local Ollama needs no key
+go run ./scripts/run_agent -seed 1   # real engine; add -stub for the stub
+go run ./scripts/run_bot -seed 1     # scripted baseline, no model
+```
+
+`iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
+it from the example's 10 before expecting a terminal run.
 
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step

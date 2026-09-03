@@ -1,5 +1,5 @@
-// Command run_agent runs one agent episode against the stub engine and prints
-// the cost record. Requires a config JSON (see config.example.json) and, for
+// Command run_agent runs one agent episode against the game engine (or, with
+// -stub, the stub) and prints the cost record. Requires a config JSON (see config.example.json) and, for
 // hosted providers, the API key in the environment variable named in the config.
 package main
 
@@ -9,13 +9,21 @@ import (
 	"fmt"
 	"os"
 
+	"architect_mockup_project/engine"
 	"architect_mockup_project/harness"
 	"architect_mockup_project/stub"
 )
 
 func main() {
 	configPath := flag.String("config", "config.json", "path to run config JSON")
+	seed := flag.Uint("seed", 1, "engine seed; same seed gives the same boards")
+	useStub := flag.Bool("stub", false, "drive the stub engine instead of the real one")
 	flag.Parse()
+
+	var game engine.Game = engine.New(uint32(*seed))
+	if *useStub {
+		game = stub.New()
+	}
 
 	cfg, err := harness.LoadConfig(*configPath)
 	if err != nil {
@@ -32,12 +40,17 @@ func main() {
 	defer tr.Close()
 
 	agent := &harness.Agent{Provider: prov, Config: cfg, Transcript: tr}
-	report, err := agent.Run(context.Background(), stub.New())
+	report, err := agent.Run(context.Background(), game)
 	if err != nil {
 		fail("run: %v", err)
 	}
 
 	fmt.Printf("provider      %s (%s)\n", cfg.Provider, cfg.Model)
+	if *useStub {
+		fmt.Println("engine        stub")
+	} else {
+		fmt.Printf("engine        seed %d\n", *seed)
+	}
 	fmt.Printf("final balance %d krones\n", report.Balance)
 	fmt.Printf("iterations    %d  (cap %d)\n", report.Iterations, cfg.IterationCap)
 	fmt.Printf("tool calls    %d\n", report.ToolCalls)
