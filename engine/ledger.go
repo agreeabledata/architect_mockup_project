@@ -46,13 +46,3 @@ func (l Ledger) creditKrone(n int, kind, note string) Ledger {
 	})
 	return l
 }
-
-func totalEarned(events []LedgerEvent) int {
-	sum := 0
-	for _, e := range events {
-		if e.Krone > 0 {
-			sum += e.Krone
-		}
-	}
-	return sum
-}

@@ -75,7 +75,7 @@ func SeedBoard(rng func() float64, seed uint32, refresh int) []Quest {
 			})
 			continue
 		}
-		days := 2 + randInt(rng, 3)
+		days := MinDeliveryDays + randInt(rng, MaxDeliveryDays-MinDeliveryDays+1)
 		title := deliveryTitles[randInt(rng, len(deliveryTitles))]
 		out = append(out, Quest{
 			ID:     id,

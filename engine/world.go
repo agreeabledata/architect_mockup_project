@@ -94,7 +94,7 @@ func (w *World) LegalActions() []Action {
 						"description": "ID of an open quest whose cost you can still afford",
 					},
 				},
-				"required": []string{"quest_id"},
+				"required": []any{"quest_id"},
 			},
 		})
 	}
@@ -189,11 +189,7 @@ func (w *World) applyFight() (Outcome, error) {
 		kind = "battle_win"
 		note = "Won: " + title + "."
 	}
-	if earned != 0 {
-		w.ledger = w.ledger.creditKrone(earned, kind, note)
-	} else {
-		w.ledger = w.ledger.creditKrone(0, kind, note)
-	}
+	w.ledger = w.ledger.creditKrone(earned, kind, note)
 	w.ledger = w.ledger.debitDays(CostBattle, "battle", fmt.Sprintf("Fought %q.", title))
 	q.Status = QuestComplete
 	w.activeID = ""
@@ -310,28 +306,16 @@ func (w *World) narrative() string {
 	return b.String()
 }
 
+// duelStory narrates a fight. The outcome is WinsBattle from balance.go -- the
+// engine never re-derives it; only the round count for the prose is computed here.
 func duelStory(balance int) (won bool, story string) {
 	power := AttackPower(balance)
-	hp, foe := AgentHP, OpponentHP
-	rounds := 0
-	for {
-		foe -= power
-		rounds++
-		if foe <= 0 {
-			return true, fmt.Sprintf("Your attack power %d fells the foe in %d rounds. You earn %d krones. %d days pass.", power, rounds, PayBattleWin, CostBattle)
-		}
-		hp -= OpponentDamage
-		if hp <= 0 {
-			return false, fmt.Sprintf("Your attack power %d is too weak; after %d rounds you fall. The purse is unchanged. %d days pass.", power, rounds, CostBattle)
-		}
+	if WinsBattle(balance) {
+		rounds := (OpponentHP + power - 1) / power
+		return true, fmt.Sprintf("Your attack power %d fells the foe in %d rounds. You earn %d krones. %d days pass.", power, rounds, PayBattleWin, CostBattle)
 	}
-}
-
-func (w *World) clone() *World {
-	c := *w
-	c.board = append([]Quest(nil), w.board...)
-	c.ledger.Events = append([]LedgerEvent(nil), w.ledger.Events...)
-	return &c
+	rounds := (AgentHP + OpponentDamage - 1) / OpponentDamage
+	return false, fmt.Sprintf("Your attack power %d is too weak; after %d rounds you fall. The purse is unchanged. %d days pass.", power, rounds, CostBattle)
 }
 
 func plural(n int, one, many string) string {

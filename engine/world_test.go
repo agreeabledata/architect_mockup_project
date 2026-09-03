@@ -94,6 +94,24 @@ func TestFightLossAtZero(t *testing.T) {
 	}
 }
 
+func TestFightOutcomeAgreesWithWinsBattle(t *testing.T) {
+	for _, bal := range []int{0, 140, 149, 150, 151, 1000} {
+		w := New(1)
+		w.ledger.Krone = bal
+		plantBattle(w, "q-b")
+		if _, err := w.Apply(ActionAccept, questArgs("q-b")); err != nil {
+			t.Fatal(err)
+		}
+		out, err := w.Apply(ActionFight, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := out.Earned == PayBattleWin, WinsBattle(bal); got != want {
+			t.Fatalf("balance %d: engine won=%v, WinsBattle=%v", bal, got, want)
+		}
+	}
+}
+
 func TestFightWinAt150(t *testing.T) {
 	w := New(1)
 	w.ledger.Krone = 150
@@ -244,4 +262,11 @@ func acceptEnum(t *testing.T, w *World) []string {
 		return enum
 	}
 	return nil
+}
+
+func (w *World) clone() *World {
+	c := *w
+	c.board = append([]Quest(nil), w.board...)
+	c.ledger.Events = append([]LedgerEvent(nil), w.ledger.Events...)
+	return &c
 }
