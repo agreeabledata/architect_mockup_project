@@ -19,6 +19,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.IterationCap != 10 {
 		t.Errorf("iteration cap = %d, want default 10", cfg.IterationCap)
 	}
+	if cfg.DecisionRetryCap != 3 {
+		t.Errorf("decision retry cap = %d, want default 3", cfg.DecisionRetryCap)
+	}
 	if got := cfg.ResolveBaseURL(); got != "http://localhost:11434/v1" {
 		t.Errorf("ollama base URL = %q", got)
 	}

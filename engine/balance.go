@@ -42,6 +42,12 @@ const (
 	// attacks. At these numbers the agent dies or wins first, so the engine
 	// does not track it -- it is a distractor in the word problem, not a rule.
 	AttackBudget = 10
+
+	// DuelLossPenalty is the krones a lost duel costs in the stub's dev world.
+	// The engine does not use it -- a v1 loss pays PayBattleLoss (0), the
+	// wasted days are the penalty (#9). It lives here so the stub, a harness
+	// test double, reads its numbers from balance.go instead of hardcoding.
+	DuelLossPenalty = 10
 )
 
 // AttackPower is the agent's damage per round: its raw krone balance, never

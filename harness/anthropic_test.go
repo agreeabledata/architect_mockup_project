@@ -32,7 +32,11 @@ func TestAnthropicChat(t *testing.T) {
 			{Role: RoleSystem, Content: "sys"},
 			{Role: RoleUser, Content: "hi"},
 		},
-		[]Tool{{Name: "rest", Description: "do nothing", Parameters: map[string]any{"type": "object"}}},
+		[]Tool{{Name: "rest", Description: "do nothing", Parameters: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"mode": map[string]any{"type": "string"}},
+			"required":   []string{"mode"},
+		}}},
 		CallOptions{Model: "claude-x", MaxTokens: 64},
 	)
 	if err != nil {
@@ -64,6 +68,41 @@ func TestAnthropicChat(t *testing.T) {
 	if tools[0].(map[string]any)["name"] != "rest" {
 		t.Errorf("tools = %+v", gotReq["tools"])
 	}
+	schema := tools[0].(map[string]any)["input_schema"].(map[string]any)
+	required, _ := schema["required"].([]any)
+	if len(required) != 1 || required[0] != "mode" {
+		t.Errorf("required = %+v, want [mode]", required)
+	}
+}
+
+func TestStringSlice(t *testing.T) {
+	cases := []struct {
+		in   any
+		want []string
+	}{
+		{[]string{"a", "b"}, []string{"a", "b"}},
+		{[]any{"a", "b"}, []string{"a", "b"}},
+		{[]any{"a", 7, "b"}, []string{"a", "b"}},
+		{nil, nil},
+		{"a", nil},
+	}
+	for _, c := range cases {
+		if got := stringSlice(c.in); !equalStrings(got, c.want) {
+			t.Errorf("stringSlice(%v) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestAnthropicToolRoundTrip(t *testing.T) {

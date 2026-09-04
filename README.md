@@ -66,7 +66,10 @@ go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 ```
 
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
-it from the example's 10 before expecting a terminal run.
+it from the example's 10 before expecting a terminal run. Within one decision a
+rejected action retries up to `decision_retry_cap` (default 3) calls; the model
+sees only the system prompt plus the last 3 turns (full history is kept in the
+transcript).
 
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step

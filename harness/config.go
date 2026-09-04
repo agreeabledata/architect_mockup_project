@@ -22,8 +22,12 @@ type Config struct {
 	Temperature  *float64            `json:"temperature"`
 	TopP         *float64            `json:"top_p"`
 	Seed         *int64              `json:"seed"`
-	IterationCap int                 `json:"iteration_cap"` // hard per-decision cap; the main cost control
+	IterationCap int                 `json:"iteration_cap"` // hard cap on model calls per run; the main cost control
 	Pricing      map[string]*Pricing `json:"pricing"`       // per-model; nil entry = free/local
+	// DecisionRetryCap is the most model calls one decision may use: an
+	// action the engine rejects retries (up to this) instead of burning the
+	// per-run budget re-deciding the same state. Zero = 3.
+	DecisionRetryCap int `json:"decision_retry_cap"`
 }
 
 // baseURLs are the OpenAI-compatible defaults per provider.
@@ -45,6 +49,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.IterationCap == 0 {
 		c.IterationCap = 10
+	}
+	if c.DecisionRetryCap == 0 {
+		c.DecisionRetryCap = 3
 	}
 	return &c, nil
 }

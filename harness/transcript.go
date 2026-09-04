@@ -29,13 +29,14 @@ func NewTranscript(dir string, cfg *Config) (*Transcript, error) {
 	}
 	t := &Transcript{w: bufio.NewWriter(f), f: f}
 	header := map[string]any{
-		"provider":       cfg.Provider,
-		"model":          cfg.Model,
-		"prompt_version": promptVersion,
-		"config_hash":    hashConfig(cfg),
-		"seed":           cfg.Seed,
-		"iteration_cap":  cfg.IterationCap,
-		"max_tokens":     cfg.MaxTokens,
+		"provider":           cfg.Provider,
+		"model":              cfg.Model,
+		"prompt_version":     promptVersion,
+		"config_hash":        hashConfig(cfg),
+		"seed":               cfg.Seed,
+		"iteration_cap":      cfg.IterationCap,
+		"decision_retry_cap": cfg.DecisionRetryCap,
+		"max_tokens":         cfg.MaxTokens,
 	}
 	return t, t.write(header)
 }
@@ -80,11 +81,13 @@ func hashConfig(c *Config) string {
 	h := sha256.New()
 	enc := json.NewEncoder(h)
 	_ = enc.Encode(map[string]any{
-		"provider": c.Provider,
-		"model":    c.Model,
-		"base_url": c.BaseURL,
-		"seed":     c.Seed,
-		"top_p":    c.TopP,
+		"provider":           c.Provider,
+		"model":              c.Model,
+		"base_url":           c.BaseURL,
+		"seed":               c.Seed,
+		"top_p":              c.TopP,
+		"iteration_cap":      c.IterationCap,
+		"decision_retry_cap": c.DecisionRetryCap,
 	})
 	return hex.EncodeToString(h.Sum(nil))
 }

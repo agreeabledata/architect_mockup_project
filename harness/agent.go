@@ -10,7 +10,12 @@ import (
 )
 
 // promptVersion hashes every run transcript to the prompt it used.
-const promptVersion = "v1"
+const promptVersion = "v2"
+
+// contextTurns is how many turns of the conversation reach the model: the
+// system prompt plus the last N turns. The fresh observation restates the
+// world, so older turns add little; the full history stays in the transcript.
+const contextTurns = 3
 
 // BuildSystem returns the shared system prompt, identical across providers.
 func BuildSystem() string {
@@ -34,6 +39,24 @@ func BuildTurn(state engine.State, actions []engine.Action) Message {
 		b.WriteString("\n")
 	}
 	return Message{Role: RoleUser, Content: b.String()}
+}
+
+// lastTurns windows a conversation down to its system message plus the last
+// turns user turns. It slices only at user-message boundaries, so assistant
+// tool calls and their results stay paired for the providers.
+func lastTurns(msgs []Message, turns int) []Message {
+	var users []int
+	for i, m := range msgs {
+		if m.Role == RoleUser {
+			users = append(users, i)
+		}
+	}
+	if len(users) <= turns {
+		return msgs
+	}
+	start := users[len(users)-turns]
+	out := make([]Message, 0, len(msgs)-start+1)
+	return append(append(out, msgs[0]), msgs[start:]...)
 }
 
 func actionsToTools(actions []engine.Action) []Tool {
@@ -60,7 +83,7 @@ type Report struct {
 	ToolCalls  int
 	Usage      Usage
 	WallTime   time.Duration
-	Reason     string // terminal | iteration_cap | no_action
+	Reason     string // terminal | iteration_cap | decision_cap | no_action
 }
 
 // Cost returns the dollar cost of the run on the configured model.
@@ -68,11 +91,18 @@ func (r Report) Cost(c *Config) float64 {
 	return c.Cost(c.Model, r.Usage.InputTokens, r.Usage.OutputTokens)
 }
 
-// Run executes the full agent loop against a game.
+// Run executes the full agent loop against a game. IterationCap bounds the
+// total model calls for the run; a decision whose actions the engine rejects
+// retries up to DecisionRetryCap times instead of churning the budget.
 func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	start := time.Now()
 	msgs := []Message{{Role: RoleSystem, Content: BuildSystem()}}
+	retryCap := a.Config.DecisionRetryCap
+	if retryCap < 1 {
+		retryCap = 3
+	}
 	var report Report
+decisions:
 	for {
 		if report.Iterations >= a.Config.IterationCap {
 			report.Reason = "iteration_cap"
@@ -88,36 +118,53 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 		actions := g.LegalActions()
 		msgs = append(msgs, BuildTurn(state, actions))
 
-		res, err := a.Provider.Chat(ctx, msgs, actionsToTools(actions), CallOptions{
-			Model:       a.Config.Model,
-			MaxTokens:   a.Config.MaxTokens,
-			Temperature: a.Config.Temperature,
-			TopP:        a.Config.TopP,
-			Seed:        a.Config.Seed,
-		})
-		if err != nil {
-			return report, fmt.Errorf("agent: %w", err)
-		}
-		report.Iterations++
-		report.Usage = addUsage(report.Usage, res.Usage)
-		if a.Transcript != nil {
-			a.Transcript.Record(msgs, res)
-		}
-
-		assistant := Message{Role: RoleAssistant, Content: res.Content, ToolCalls: res.ToolCalls}
-		msgs = append(msgs, assistant)
-		if len(res.ToolCalls) == 0 {
-			report.Reason = "no_action"
-			break
-		}
-		for _, tc := range res.ToolCalls {
-			report.ToolCalls++
-			outcome, err := g.Apply(tc.Name, tc.Arguments)
-			if err != nil {
-				outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
+		// One decision: chat until an action applies, or the retry cap gives
+		// up. A rejected action retries without a fresh observation -- the
+		// tool-error feedback is the next attempt's prompt.
+		decided := false
+		for attempt := 0; attempt < retryCap; attempt++ {
+			if report.Iterations >= a.Config.IterationCap {
+				report.Reason = "iteration_cap"
+				break decisions
 			}
-			msgs = append(msgs, Message{Role: RoleTool, ToolCallID: tc.ID, Content: outcome.Narrative})
+			res, err := a.Provider.Chat(ctx, lastTurns(msgs, contextTurns), actionsToTools(actions), CallOptions{
+				Model:       a.Config.Model,
+				MaxTokens:   a.Config.MaxTokens,
+				Temperature: a.Config.Temperature,
+				TopP:        a.Config.TopP,
+				Seed:        a.Config.Seed,
+			})
+			if err != nil {
+				return report, fmt.Errorf("agent: %w", err)
+			}
+			report.Iterations++
+			report.Usage = addUsage(report.Usage, res.Usage)
+			if a.Transcript != nil {
+				a.Transcript.Record(msgs, res)
+			}
+
+			assistant := Message{Role: RoleAssistant, Content: res.Content, ToolCalls: res.ToolCalls}
+			msgs = append(msgs, assistant)
+			if len(res.ToolCalls) == 0 {
+				report.Reason = "no_action"
+				break decisions
+			}
+			for _, tc := range res.ToolCalls {
+				report.ToolCalls++
+				outcome, err := g.Apply(tc.Name, tc.Arguments)
+				if err != nil {
+					outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
+				} else {
+					decided = true
+				}
+				msgs = append(msgs, Message{Role: RoleTool, ToolCallID: tc.ID, Content: outcome.Narrative})
+			}
+			if decided {
+				continue decisions
+			}
 		}
+		report.Reason = "decision_cap"
+		break
 	}
 	report.WallTime = time.Since(start)
 	return report, nil
