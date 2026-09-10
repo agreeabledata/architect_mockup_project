@@ -42,11 +42,14 @@ const (
 	// attacks. At these numbers the agent dies or wins first, so the engine
 	// does not track it -- it is a distractor in the word problem, not a rule.
 	AttackBudget = 10
+)
 
+// Stub-dev only, not part of the v1 economy: the stub, a harness test double,
+// reads its numbers from here instead of hardcoding.
+const (
 	// DuelLossPenalty is the krones a lost duel costs in the stub's dev world.
 	// The engine does not use it -- a v1 loss pays PayBattleLoss (0), the
-	// wasted days are the penalty (#9). It lives here so the stub, a harness
-	// test double, reads its numbers from balance.go instead of hardcoding.
+	// wasted days are the penalty (#9).
 	DuelLossPenalty = 10
 )
 

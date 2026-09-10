@@ -69,7 +69,9 @@ go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 it from the example's 10 before expecting a terminal run. Within one decision a
 rejected action retries up to `decision_retry_cap` (default 3) calls; the model
 sees only the system prompt plus the last 3 turns (full history is kept in the
-transcript).
+transcript). The windowed context changed the model inputs, so `prompt_version`
+is now `v2` and `config_hash` inputs changed with it: transcripts from before
+that bump are **not comparable** to runs of the same model and seed after it.
 
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step

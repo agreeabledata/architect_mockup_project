@@ -30,6 +30,17 @@ type Config struct {
 	DecisionRetryCap int `json:"decision_retry_cap"`
 }
 
+const defaultDecisionRetryCap = 3
+
+// DecisionRetryCapOrDefault returns the configured per-decision retry cap, or
+// the default when unset. Configs built without LoadConfig still get a cap.
+func (c *Config) DecisionRetryCapOrDefault() int {
+	if c.DecisionRetryCap < 1 {
+		return defaultDecisionRetryCap
+	}
+	return c.DecisionRetryCap
+}
+
 // baseURLs are the OpenAI-compatible defaults per provider.
 var baseURLs = map[string]string{
 	"openai":   "https://api.openai.com/v1",
@@ -51,7 +62,7 @@ func LoadConfig(path string) (*Config, error) {
 		c.IterationCap = 10
 	}
 	if c.DecisionRetryCap == 0 {
-		c.DecisionRetryCap = 3
+		c.DecisionRetryCap = defaultDecisionRetryCap
 	}
 	return &c, nil
 }

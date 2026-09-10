@@ -91,12 +91,10 @@ func TestAgentFullRun(t *testing.T) {
 
 func TestAgentIterationCap(t *testing.T) {
 	prov := &scriptedProvider{plan: []Result{
-		{Content: "rest", ToolCalls: []ToolCall{{ID: "r1", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
-		{Content: "rest", ToolCalls: []ToolCall{{ID: "r2", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
-		{Content: "rest", ToolCalls: []ToolCall{{ID: "r3", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
-		{Content: "rest", ToolCalls: []ToolCall{{ID: "r4", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{Content: "I'll take the delivery.", ToolCalls: []ToolCall{{ID: "c1", Name: "take_delivery", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{Content: "Delivering now.", ToolCalls: []ToolCall{{ID: "c2", Name: "deliver_package", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
 	}}
-	agent := &Agent{Provider: prov, Config: testConfig(3)}
+	agent := &Agent{Provider: prov, Config: testConfig(2)}
 	report, err := agent.Run(context.Background(), stub.New())
 	if err != nil {
 		t.Fatal(err)
@@ -104,11 +102,16 @@ func TestAgentIterationCap(t *testing.T) {
 	if report.Reason != "iteration_cap" {
 		t.Errorf("reason = %q, want iteration_cap", report.Reason)
 	}
-	if report.Iterations != 3 {
-		t.Errorf("iterations = %d, want 3", report.Iterations)
+	if report.Iterations != 2 {
+		t.Errorf("iterations = %d, want 2", report.Iterations)
 	}
-	if prov.calls != 3 {
-		t.Errorf("provider called %d times, want 3", prov.calls)
+	if prov.calls != 2 {
+		t.Errorf("provider called %d times, want 2", prov.calls)
+	}
+	// The cap check precedes Observe, so Balance must be re-read after the
+	// last applied action, not left at the pre-delivery value.
+	if report.Balance != 12 {
+		t.Errorf("balance = %d, want 12 (engine state after deliver)", report.Balance)
 	}
 }
 
@@ -175,6 +178,36 @@ func TestAgentDecisionRetryCap(t *testing.T) {
 	}
 	if users != 1 {
 		t.Errorf("call 3 has %d user messages, want 1 (no re-observation on retry)", users)
+	}
+}
+
+func TestLastTurns(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleSystem, Content: "sys"},
+		{Role: RoleUser, Content: "u1"},
+		{Role: RoleAssistant, Content: "a1"},
+		{Role: RoleTool, ToolCallID: "1", Content: "t1"},
+		{Role: RoleUser, Content: "u2"},
+		{Role: RoleAssistant, Content: "a2"},
+		{Role: RoleUser, Content: "u3"},
+		{Role: RoleAssistant, Content: "a3"},
+	}
+
+	if got := lastTurns(msgs, 5); len(got) != len(msgs) {
+		t.Errorf("short history trimmed: %d, want %d", len(got), len(msgs))
+	}
+
+	got := lastTurns(msgs, 2)
+	if len(got) != 5 || got[0].Role != RoleSystem {
+		t.Fatalf("window = %+v", got)
+	}
+	if got[1].Role != RoleUser || got[1].Content != "u2" {
+		t.Errorf("window must start at the 2nd-last user turn, got %+v", got[1])
+	}
+	for _, m := range got {
+		if m.Content == "u1" || m.Content == "t1" {
+			t.Errorf("stale turn survived: %+v", m)
+		}
 	}
 }
 

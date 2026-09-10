@@ -51,7 +51,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 			var b strings.Builder
 			b.WriteString(m.Content)
 			params.System = append(params.System, anthropic.TextBlockParam{Text: b.String()})
-		case RoleUser:
+		case RoleUser, RoleTool:
 			if m.ToolCallID != "" {
 				params.Messages = append(params.Messages, anthropic.NewUserMessage(
 					anthropic.NewToolResultBlock(m.ToolCallID, m.Content, false),

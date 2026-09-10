@@ -36,6 +36,7 @@ func NewTranscript(dir string, cfg *Config) (*Transcript, error) {
 		"seed":               cfg.Seed,
 		"iteration_cap":      cfg.IterationCap,
 		"decision_retry_cap": cfg.DecisionRetryCap,
+		"context_turns":      contextTurns,
 		"max_tokens":         cfg.MaxTokens,
 	}
 	return t, t.write(header)

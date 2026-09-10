@@ -97,10 +97,7 @@ func (r Report) Cost(c *Config) float64 {
 func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	start := time.Now()
 	msgs := []Message{{Role: RoleSystem, Content: BuildSystem()}}
-	retryCap := a.Config.DecisionRetryCap
-	if retryCap < 1 {
-		retryCap = 3
-	}
+	retryCap := a.Config.DecisionRetryCapOrDefault()
 	var report Report
 decisions:
 	for {
@@ -166,6 +163,10 @@ decisions:
 		report.Reason = "decision_cap"
 		break
 	}
+	// The cap check precedes Observe, so the last applied action is not yet
+	// reflected; re-observe once so Balance/FinalState describe the end state.
+	s := g.Observe()
+	report.FinalState, report.Balance = s, s.Balance
 	report.WallTime = time.Since(start)
 	return report, nil
 }
