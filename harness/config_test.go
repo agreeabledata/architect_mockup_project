@@ -24,6 +24,25 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestResolveBaseURL(t *testing.T) {
+	tests := []struct {
+		provider string
+		baseURL  string
+		want     string
+	}{
+		{provider: "openrouter", want: "https://openrouter.ai/api/v1"},
+		{provider: "openrouter", baseURL: "http://localhost:8080/v1", want: "http://localhost:8080/v1"},
+		{provider: "deepseek", want: "https://api.deepseek.com"},
+		{provider: "anthropic", want: ""}, // not openai-compat, so no default
+	}
+	for _, tt := range tests {
+		cfg := &Config{Provider: tt.provider, BaseURL: tt.baseURL}
+		if got := cfg.ResolveBaseURL(); got != tt.want {
+			t.Errorf("ResolveBaseURL(%q, base_url=%q) = %q, want %q", tt.provider, tt.baseURL, got, tt.want)
+		}
+	}
+}
+
 func TestConfigCost(t *testing.T) {
 	cfg := &Config{Model: "m", Pricing: map[string]*Pricing{
 		"m": {InputPerMillion: 1, OutputPerMillion: 2},

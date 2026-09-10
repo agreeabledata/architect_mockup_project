@@ -68,6 +68,18 @@ go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
 it from the example's 10 before expecting a terminal run.
 
+**Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
+Completions API, so it reuses the existing client — no new provider code. Set
+`"provider": "openrouter"` and `"api_key_env": "OPENROUTER_API_KEY"`, leave
+`base_url` empty (it defaults to `https://openrouter.ai/api/v1`), export the key,
+and run `go run ./scripts/run_agent`. This is the cheapest way to compare several
+vendors' models under one key and one code path. Note that OpenRouter model IDs
+are `vendor/model` — e.g. `meta-llama/llama-3.3-70b-instruct`, not
+`llama-3.3-70b-instruct` — and that the same string is the `pricing` lookup key,
+so a model with no matching entry reports $0.00. OpenRouter's per-model rates
+depend on which upstream provider it routes to, so confirm the current numbers
+rather than trusting the example config's.
+
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step
 checklists; suggested layout `/engine`, `/harness`, `/quests`, `/scripts`.

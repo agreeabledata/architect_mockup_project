@@ -11,7 +11,7 @@ import (
 )
 
 // OpenAICompatProvider talks to any OpenAI-compatible Chat Completions endpoint
-// (OpenAI, DeepSeek, Ollama) via the official openai-go SDK.
+// (OpenAI, DeepSeek, OpenRouter, Ollama) via the official openai-go SDK.
 type OpenAICompatProvider struct {
 	client openai.Client
 }

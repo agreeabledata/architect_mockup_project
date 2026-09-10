@@ -14,7 +14,7 @@ type Pricing struct {
 // Config is the run configuration, loaded from a JSON file. API keys come from
 // the environment, never from the file.
 type Config struct {
-	Provider     string              `json:"provider"` // openai | deepseek | ollama | anthropic
+	Provider     string              `json:"provider"` // openai | deepseek | openrouter | ollama | anthropic
 	Model        string              `json:"model"`
 	BaseURL      string              `json:"base_url"`    // empty = provider default (openai-compat only)
 	APIKeyEnv    string              `json:"api_key_env"` // env var holding the key; empty = local model
@@ -26,11 +26,14 @@ type Config struct {
 	Pricing      map[string]*Pricing `json:"pricing"`       // per-model; nil entry = free/local
 }
 
-// baseURLs are the OpenAI-compatible defaults per provider.
+// baseURLs are the OpenAI-compatible defaults per provider. The matching key
+// env vars are OPENAI_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY (Ollama
+// needs none); each run names one in its config's api_key_env.
 var baseURLs = map[string]string{
-	"openai":   "https://api.openai.com/v1",
-	"deepseek": "https://api.deepseek.com",
-	"ollama":   "http://localhost:11434/v1",
+	"openai":     "https://api.openai.com/v1",
+	"deepseek":   "https://api.deepseek.com",
+	"openrouter": "https://openrouter.ai/api/v1",
+	"ollama":     "http://localhost:11434/v1",
 }
 
 // LoadConfig reads config from path and applies defaults.
