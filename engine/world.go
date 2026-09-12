@@ -11,6 +11,8 @@ const (
 	ActionAccept  = "accept_quest"
 	ActionDeliver = "deliver"
 	ActionFight   = "fight"
+	ActionScry    = "scry"
+	ActionCast    = "cast_spell"
 	ActionRefresh = "refresh_board"
 )
 
@@ -71,6 +73,9 @@ func (w *World) LegalActions() []Action {
 				),
 			}}
 		}
+		if q.Kind == QuestArcane {
+			return w.arcaneActions(q)
+		}
 		return []Action{{
 			Name: ActionDeliver,
 			Description: fmt.Sprintf(
@@ -123,6 +128,10 @@ func (w *World) Apply(name string, args json.RawMessage) (Outcome, error) {
 		return w.applyDeliver()
 	case ActionFight:
 		return w.applyFight()
+	case ActionScry:
+		return w.applyScry(args)
+	case ActionCast:
+		return w.applyCast(args)
 	case ActionRefresh:
 		return w.applyRefresh()
 	default:
@@ -195,6 +204,157 @@ func (w *World) applyFight() (Outcome, error) {
 	w.activeID = ""
 	w.markDoneIfSpent()
 	return w.outcome(earned, story), nil
+}
+
+// arcaneActions lists the ritual's legal moves: scry an undisrupted, unrevealed
+// node, and cast any of the three resonance spells at the current node.
+func (w *World) arcaneActions(q *Quest) []Action {
+	var acts []Action
+	if nodes := scryableNodes(q); len(nodes) > 0 && q.Mana >= ManaScry {
+		acts = append(acts, Action{
+			Name: ActionScry,
+			Description: fmt.Sprintf(
+				"Scry one undisrupted node for %d mana, revealing its hidden resonance. %d mana remains.",
+				ManaScry, q.Mana,
+			),
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"node": map[string]any{
+						"type":        "integer",
+						"enum":        nodes,
+						"description": "1-based node number to scry",
+					},
+				},
+				"required": []any{"node"},
+			},
+		})
+	}
+	if q.Mana >= ManaSpell {
+		acts = append(acts, Action{
+			Name: ActionCast,
+			Description: fmt.Sprintf(
+				"Cast a resonance spell at node %d. Costs %d mana; a wrong resonance backlashes for %d more. Disrupt all %d nodes to finish.",
+				q.NextNode+1, ManaSpell, ManaBacklash, ArcaneNodes,
+			),
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"spell": map[string]any{
+						"type":        "string",
+						"enum":        []string{string(ResonanceFire), string(ResonanceWater), string(ResonanceEarth)},
+						"description": "resonance to cast at the current node",
+					},
+				},
+				"required": []any{"spell"},
+			},
+		})
+	}
+	return acts
+}
+
+// scryableNodes returns the 1-based numbers of undisrupted nodes not yet
+// revealed.
+func scryableNodes(q *Quest) []int {
+	var nodes []int
+	for i := q.NextNode; i < ArcaneNodes; i++ {
+		if !q.Revealed[i] {
+			nodes = append(nodes, i+1)
+		}
+	}
+	return nodes
+}
+
+// arcaneStuck reports whether no ritual action remains affordable: too little
+// mana to cast, and either too little to scry or nothing left to scry. A stuck
+// ritual collapses.
+func (w *World) arcaneStuck(q *Quest) bool {
+	if q.Mana >= ManaSpell {
+		return false
+	}
+	if q.Mana >= ManaScry && len(scryableNodes(q)) > 0 {
+		return false
+	}
+	return true
+}
+
+func (w *World) applyScry(raw json.RawMessage) (Outcome, error) {
+	q := w.questByID(w.activeID)
+	if q == nil || q.Status != QuestActive || q.Kind != QuestArcane {
+		return Outcome{}, fmt.Errorf("no ritual in progress")
+	}
+	node, err := parseScryNode(raw)
+	if err != nil {
+		return Outcome{}, err
+	}
+	i := node - 1
+	if i < q.NextNode || i >= ArcaneNodes {
+		return Outcome{}, fmt.Errorf("node %d is not an undisrupted node", node)
+	}
+	if q.Revealed[i] {
+		return Outcome{}, fmt.Errorf("node %d is already scried", node)
+	}
+	if q.Mana < ManaScry {
+		return Outcome{}, fmt.Errorf("not enough mana to scry")
+	}
+	q.Mana -= ManaScry
+	q.Revealed[i] = true
+	msg := fmt.Sprintf("You scry node %d: it resonates with %s. %d mana remains.", node, q.Nodes[i], q.Mana)
+	if w.arcaneStuck(q) {
+		return w.arcaneCollapse(q, msg+" Too little mana remains to act; the ritual collapses."), nil
+	}
+	return w.outcome(0, msg), nil
+}
+
+func (w *World) applyCast(raw json.RawMessage) (Outcome, error) {
+	q := w.questByID(w.activeID)
+	if q == nil || q.Status != QuestActive || q.Kind != QuestArcane {
+		return Outcome{}, fmt.Errorf("no ritual in progress")
+	}
+	spell, err := parseCastSpell(raw)
+	if err != nil {
+		return Outcome{}, err
+	}
+	if q.Mana < ManaSpell {
+		return Outcome{}, fmt.Errorf("not enough mana to cast")
+	}
+	node := q.NextNode + 1
+	if Resonance(spell) == q.Nodes[q.NextNode] {
+		q.Mana -= ManaSpell
+		q.NextNode++
+		if q.NextNode == ArcaneNodes {
+			msg := fmt.Sprintf("Your %s spell disrupts node %d. All %d nodes fall and the ritual is undone.", spell, node, ArcaneNodes)
+			return w.arcaneSuccess(q, msg), nil
+		}
+		msg := fmt.Sprintf("Your %s spell disrupts node %d. %d mana remains; node %d is next.", spell, node, q.Mana, q.NextNode+1)
+		if w.arcaneStuck(q) {
+			return w.arcaneCollapse(q, msg+" Too little mana remains to act; the ritual collapses."), nil
+		}
+		return w.outcome(0, msg), nil
+	}
+	q.Mana -= ManaSpell + ManaBacklash
+	msg := fmt.Sprintf("The %s spell is wrong; node %d backlashes, draining %d mana.", spell, node, ManaSpell+ManaBacklash)
+	if w.arcaneStuck(q) {
+		return w.arcaneCollapse(q, msg+" The ritual collapses."), nil
+	}
+	return w.outcome(0, fmt.Sprintf("%s %d mana remains.", msg, q.Mana)), nil
+}
+
+func (w *World) arcaneSuccess(q *Quest, msg string) Outcome {
+	q.Status = QuestComplete
+	w.activeID = ""
+	w.ledger = w.ledger.creditKrone(PayArcane, "arcane", "Dispersed "+q.Title+".")
+	w.ledger = w.ledger.debitDays(CostArcane, "ritual", fmt.Sprintf("Completed %q.", q.Title))
+	w.markDoneIfSpent()
+	return w.outcome(PayArcane, fmt.Sprintf("%s You are paid %d krones; %d days pass.", msg, PayArcane, CostArcane))
+}
+
+func (w *World) arcaneCollapse(q *Quest, msg string) Outcome {
+	q.Status = QuestComplete
+	w.activeID = ""
+	w.ledger = w.ledger.debitDays(CostArcane, "ritual", fmt.Sprintf("Ritual collapsed: %q.", q.Title))
+	w.markDoneIfSpent()
+	return w.outcome(0, fmt.Sprintf("%s The purse is unchanged; %d days pass.", msg, CostArcane))
 }
 
 func (w *World) applyRefresh() (Outcome, error) {
@@ -271,6 +431,36 @@ func parseQuestID(raw json.RawMessage) (string, error) {
 	return args.QuestID, nil
 }
 
+func parseScryNode(raw json.RawMessage) (int, error) {
+	if len(raw) == 0 {
+		return 0, fmt.Errorf("scry requires {\"node\": 1}")
+	}
+	var args struct {
+		Node int `json:"node"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return 0, fmt.Errorf("scry args: %w", err)
+	}
+	return args.Node, nil
+}
+
+func parseCastSpell(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", fmt.Errorf("cast_spell requires {\"spell\": \"fire\"}")
+	}
+	var args struct {
+		Spell string `json:"spell"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return "", fmt.Errorf("cast_spell args: %w", err)
+	}
+	switch Resonance(args.Spell) {
+	case ResonanceFire, ResonanceWater, ResonanceEarth:
+		return args.Spell, nil
+	}
+	return "", fmt.Errorf("unknown resonance %q", args.Spell)
+}
+
 func (w *World) narrative() string {
 	var b strings.Builder
 	elapsed := StartingLifespanDays - w.ledger.Days
@@ -295,11 +485,21 @@ func (w *World) narrative() string {
 	}
 	b.WriteByte('\n')
 	if q := w.questByID(w.activeID); q != nil {
-		verb := ActionDeliver
-		if q.Kind == QuestBattle {
-			verb = ActionFight
+		if q.Kind == QuestArcane {
+			fmt.Fprintf(&b, "You hold %q. Node %d of %d is next; %d mana remains.\n",
+				q.Title, q.NextNode+1, ArcaneNodes, q.Mana)
+			for i := q.NextNode; i < ArcaneNodes; i++ {
+				if q.Revealed[i] {
+					fmt.Fprintf(&b, "- node %d resonates with %s.\n", i+1, q.Nodes[i])
+				}
+			}
+		} else {
+			verb := ActionDeliver
+			if q.Kind == QuestBattle {
+				verb = ActionFight
+			}
+			fmt.Fprintf(&b, "You hold %q. The next action is %s.\n", q.Title, verb)
 		}
-		fmt.Fprintf(&b, "You hold %q. The next action is %s.\n", q.Title, verb)
 	} else {
 		b.WriteString("No job is in your hands. Accept a quest, or spend a day to refresh the board.\n")
 	}

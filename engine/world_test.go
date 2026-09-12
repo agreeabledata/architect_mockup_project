@@ -310,6 +310,148 @@ func TestUnwinnableFightIsLegal(t *testing.T) {
 	}
 }
 
+func TestArcaneScryRevealsAndSpendsMana(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceFire, ResonanceWater, ResonanceEarth})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := w.Apply(ActionScry, json.RawMessage(`{"node":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Earned != 0 {
+		t.Fatalf("scry earned = %d", out.Earned)
+	}
+	q := w.questByID("q-a")
+	if !q.Revealed[0] {
+		t.Fatal("node 1 not revealed")
+	}
+	if q.Mana != ArcaneMana-ManaScry {
+		t.Fatalf("mana = %d", q.Mana)
+	}
+	before := w.clone()
+	if _, err := w.Apply(ActionScry, json.RawMessage(`{"node":1}`)); err == nil {
+		t.Fatal("re-scrying node 1 should error")
+	}
+	if !reflect.DeepEqual(w, before) {
+		t.Fatal("failed scry mutated world")
+	}
+}
+
+func TestArcaneSolvePaysFromBalance(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceFire, ResonanceWater, ResonanceEarth})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		`{"node":1}`, `{"node":2}`,
+	} {
+		if _, err := w.Apply(ActionScry, json.RawMessage(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := w.Apply(ActionCast, json.RawMessage(`{"spell":"fire"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Earned != 0 {
+		t.Fatalf("intermediate cast earned = %d", out.Earned)
+	}
+	for _, raw := range []string{
+		`{"spell":"water"}`, `{"spell":"earth"}`,
+	} {
+		out, err = w.Apply(ActionCast, json.RawMessage(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out.Earned != PayArcane || out.Balance != PayArcane {
+		t.Fatalf("earned=%d balance=%d, want %d", out.Earned, out.Balance, PayArcane)
+	}
+	if out.LifespanDays != StartingLifespanDays-CostArcane {
+		t.Fatalf("days = %d", out.LifespanDays)
+	}
+	if q := w.questByID("q-a"); q.Status != QuestComplete {
+		t.Fatalf("status = %s", q.Status)
+	}
+	if w.activeID != "" {
+		t.Fatal("quest still active after success")
+	}
+}
+
+func TestArcaneWrongCastBacklashes(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceFire, ResonanceWater, ResonanceEarth})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	out, err := w.Apply(ActionCast, json.RawMessage(`{"spell":"water"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Earned != 0 {
+		t.Fatalf("backlash earned = %d", out.Earned)
+	}
+	q := w.questByID("q-a")
+	if q.NextNode != 0 {
+		t.Fatalf("node advanced on wrong cast: %d", q.NextNode)
+	}
+	if want := ArcaneMana - ManaSpell - ManaBacklash; q.Mana != want {
+		t.Fatalf("mana = %d, want %d", q.Mana, want)
+	}
+}
+
+func TestArcaneCollapsePaysNothing(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceFire, ResonanceWater, ResonanceEarth})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	var out Outcome
+	for i := 0; i < 3 && w.activeID != ""; i++ {
+		var err error
+		out, err = w.Apply(ActionCast, json.RawMessage(`{"spell":"water"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out.Earned != 0 || out.Balance != 0 {
+		t.Fatalf("collapse earned=%d balance=%d", out.Earned, out.Balance)
+	}
+	if out.LifespanDays != StartingLifespanDays-CostArcane {
+		t.Fatalf("days = %d", out.LifespanDays)
+	}
+	if q := w.questByID("q-a"); q.Status != QuestComplete {
+		t.Fatalf("status = %s", q.Status)
+	}
+}
+
+func TestArcaneUnknownSpellNoMutation(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceFire, ResonanceWater, ResonanceEarth})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	before := w.clone()
+	if _, err := w.Apply(ActionCast, json.RawMessage(`{"spell":"shadow"}`)); err == nil {
+		t.Fatal("unknown resonance should error")
+	}
+	if !reflect.DeepEqual(w, before) {
+		t.Fatal("failed cast mutated world")
+	}
+}
+
+func plantArcane(w *World, id string, nodes [ArcaneNodes]Resonance) {
+	w.board = []Quest{{
+		ID: id, Kind: QuestArcane, Title: "test rite",
+		Days: CostArcane, Payout: PayArcane, Status: QuestOpen,
+		Blurb: arcaneBlurb(), Nodes: nodes, Mana: ArcaneMana,
+	}}
+	w.activeID = ""
+}
+
 func plantDelivery(w *World, id string, days, pay int) {
 	w.board = []Quest{{
 		ID: id, Kind: QuestDelivery, Title: "test parcel",
