@@ -10,7 +10,7 @@ import (
 )
 
 // promptVersion hashes every run transcript to the prompt it used.
-const promptVersion = "v2"
+const promptVersion = "v3"
 
 // contextTurns is how many turns of the conversation reach the model: the
 // system prompt plus the last N turns. The fresh observation restates the
