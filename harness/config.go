@@ -16,8 +16,8 @@ type Pricing struct {
 type Config struct {
 	Provider     string              `json:"provider"` // openai | deepseek | openrouter | ollama | anthropic
 	Model        string              `json:"model"`
-	BaseURL      string              `json:"base_url"`    // empty = provider default (openai-compat only)
-	APIKeyEnv    string              `json:"api_key_env"` // env var holding the key; empty = local model
+	BaseURL      string              `json:"base_url"` // empty = provider default (openai-compat only)
+	APIKey       string              `json:"api_key"`  // env var holding the key; empty = local model
 	MaxTokens    int64               `json:"max_tokens"`
 	Temperature  *float64            `json:"temperature"`
 	TopP         *float64            `json:"top_p"`
@@ -50,14 +50,6 @@ func LoadConfig(path string) (*Config, error) {
 		c.IterationCap = 10
 	}
 	return &c, nil
-}
-
-// APIKey returns the configured API key from the environment, or "" if none.
-func (c *Config) APIKey() string {
-	if c.APIKeyEnv == "" {
-		return ""
-	}
-	return os.Getenv(c.APIKeyEnv)
 }
 
 // ResolveBaseURL returns the effective base URL for an openai-compat provider.
