@@ -31,6 +31,22 @@ const (
 
 	QuestsPerBoard     = 5
 	MaxBattlesPerBoard = 2
+
+	// Arcane Dispersal (issue #21). Mana is the limiting resource: the agent
+	// must disrupt ArcaneNodes in order, each with the spell matching its
+	// hidden resonance. The budget is deliberately tight -- scrying every node
+	// and casting every spell costs ManaScry*N + ManaSpell*N, which exceeds
+	// ArcaneMana, so the agent must scry all but one node and deduce the last
+	// by elimination. A wrong cast backlashes for ManaBacklash extra and
+	// usually collapses the ritual.
+	CostArcane        = 3   // days to attempt the ritual, win or lose
+	PayArcane         = 150 // paid on success; a collapse pays PayBattleLoss (0)
+	MaxArcanePerBoard = 1
+	ArcaneNodes       = 3
+	ArcaneMana        = 8
+	ManaScry          = 1
+	ManaSpell         = 2
+	ManaBacklash      = 2
 )
 
 // Duel constants (issue #1 spec, coin-powered).
