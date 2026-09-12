@@ -14,5 +14,5 @@ jobs:
           cache: true
       - run: go vet ./...
       - run: go test ./...
-      - name: bot baseline (seed 1 -> 1650)
-        run: go run ./scripts/run_bot -seed 1 | grep -q 'balance=1650.*done=true'
+      - name: bot baseline (seed 1 -> 1640)
+        run: go run ./scripts/run_bot -seed 1 | grep -q 'balance=1640.*done=true'

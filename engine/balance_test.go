@@ -24,3 +24,20 @@ func TestAttackBudgetNeverBinds(t *testing.T) {
 		t.Fatalf("agent lands %d attacks, budget of %d would bind", maxAttacks, AttackBudget)
 	}
 }
+
+// The arcane budget must force deduction: scrying every node and casting every
+// spell is unaffordable, but scrying all but one and deducing the last fits.
+// If mana, scry, or spell costs change, this says so.
+func TestArcaneManaForcesDeduction(t *testing.T) {
+	scryAll := ManaScry*ArcaneNodes + ManaSpell*ArcaneNodes
+	if scryAll <= ArcaneMana {
+		t.Fatalf("budget %d allows scrying every node (%d); no deduction needed", ArcaneMana, scryAll)
+	}
+	optimal := ManaScry*(ArcaneNodes-1) + ManaSpell*ArcaneNodes
+	if optimal > ArcaneMana {
+		t.Fatalf("budget %d cannot fund the optimal line (%d)", ArcaneMana, optimal)
+	}
+	if !arcaneSolvable(Quest{Mana: ArcaneMana}) {
+		t.Fatal("a fresh ritual should be solvable")
+	}
+}

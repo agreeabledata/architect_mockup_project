@@ -33,6 +33,34 @@ func TestBotFundsThenFights(t *testing.T) {
 	}
 }
 
+func TestBotSolvesArcaneWithoutPeeking(t *testing.T) {
+	w := New(1)
+	plantArcane(w, "q-a", [ArcaneNodes]Resonance{ResonanceWater, ResonanceEarth, ResonanceFire})
+	if _, err := w.Apply(ActionAccept, questArgs("q-a")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2*ArcaneNodes+2 && w.activeID != ""; i++ {
+		if _, err := w.StepBot(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if q := w.questByID("q-a"); q.Status != QuestComplete {
+		t.Fatalf("ritual not complete: %s", q.Status)
+	}
+	if w.ledger.Krone != PayArcane {
+		t.Fatalf("balance = %d, want %d", w.ledger.Krone, PayArcane)
+	}
+}
+
+func TestBotDeterministicPerSeed(t *testing.T) {
+	a, b := New(9), New(9)
+	DriveBot(a)
+	DriveBot(b)
+	if a.Observe().Balance != b.Observe().Balance || a.Observe().LifespanDays != b.Observe().LifespanDays {
+		t.Fatalf("same seed diverged: %+v vs %+v", a.Observe(), b.Observe())
+	}
+}
+
 func TestBotSkipsUnwinnableBattles(t *testing.T) {
 	w := New(1)
 	w.board = []Quest{
