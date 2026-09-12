@@ -57,8 +57,8 @@ func TestConfigCost(t *testing.T) {
 
 func TestConfigAPIKeyEnv(t *testing.T) {
 	t.Setenv("TEST_HARNESS_KEY", "sekret")
-	cfg := &Config{APIKeyEnv: "TEST_HARNESS_KEY"}
-	if got := cfg.APIKey(); got != "sekret" {
+	cfg := &Config{APIKey: "TEST_HARNESS_KEY"}
+	if got := cfg.APIKey; got != "sekret" {
 		t.Errorf("key = %q", got)
 	}
 }
