@@ -109,7 +109,8 @@ explicit — taking a quest spends life the agent cannot get back.
 - Every action costs days of lifespan. **Settled (#8), and the numbers now live in
   `engine/balance.go` — that file is the only place the economy is defined:**
   50 days of lifespan, starting balance 0. A battle costs 2 days; a delivery costs
-  its distance, 2–4 days; drawing a fresh board of 5 quests costs 1 day.
+  its distance, 2–4 days; an arcane ritual costs 3 days; drawing a fresh board of
+  5 quests costs 1 day.
 - **Payouts (#8):** deliveries pay 60 / 70 / 100 for short / medium / long, so the
   short run pays best per day and ordering the board is a real decision. A won
   battle pays 120 (60/day); a lost one pays 0 and still costs its 2 days. Nothing
@@ -153,6 +154,26 @@ explicit — taking a quest spends life the agent cannot get back.
   `engine.WinsBattle` and its test pin the 150-krone threshold and assert the budget
   stays non-binding.
 
+### Arcane Dispersal — the third quest type (issue #21)
+
+Shipped as the first post-v1 quest type. A spell-sequencing puzzle whose limiting
+resource is **mana**, not time or krones:
+
+- 3 nodes, each keyed to a different resonance (fire / water / earth), and every
+  resonance appears exactly once — but which node holds which is hidden. Nodes must
+  be disrupted in order.
+- `cast_spell` costs 2 mana; a wrong resonance backlashes for 2 more and usually
+  collapses the ritual. `scry` costs 1 mana and reveals one node's resonance.
+- You start with 8 mana. Scrying every node and casting every spell costs 9 — over
+  budget — so the agent must **scry all but one node and deduce the last by
+  elimination** (2 + 6 = 8, exact). Guessing is strictly worse than scrying once the
+  follow-up cast is counted.
+- Success pays 150 (50/day); a collapse pays 0. Either way it costs 3 days. At most
+  one ritual per board. All numbers live in `engine/balance.go`.
+- The greedy bot plays the no-peek optimal line (scry until deducible, then cast), so
+  the baseline stays honest; `TestArcaneManaForcesDeduction` keeps the budget tight
+  enough that deduction is still required.
+
 ### Spending coins on battle items — deferred past v1 (#9)
 
 Decided on 2026-08-20: **v1 has no shop and no spending.** Attack power reads the
@@ -171,9 +192,9 @@ end-to-end run; the idea as originally written:
 
 ### Non-combat quest challenges (issue #2)
 
-**v1 takes the Courier only** (#7). The Merchant's Bargain is liked but needs an
-objective scoring model before it can be an eval — negotiation is subjective as
-written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
+**v1 shipped the Courier** (#7); **Arcane Dispersal landed next** (#21, see above).
+The Merchant's Bargain is liked but needs an objective scoring model before it can
+be an eval — negotiation is subjective as written; Survival Trek is deferred.
 
 - Four quest writeups: **The Courier's Errand** (timed delivery with package
   condition), **The Merchant's Bargain** (negotiation against a hidden minimum
@@ -184,8 +205,9 @@ written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
 - Open questions: per-quest krone payouts and turn costs; the tool surface each
   quest exposes (actions, observations, hidden state); differentiating Courier
   (deterministic, full-information planning) from Trek (stochastic,
-  partial-information risk management); how the agent learns the correct order
-  in Arcane Dispersal.
+  partial-information risk management). Arcane Dispersal's "learn the order" is
+  settled (#21): the resonances are a permutation, so scrying all but one node and
+  deducing the last is the intended line.
 - Future ideas: an investigation quest (pay per clue, commit to a conclusion);
   a two-faction diplomacy quest (parked until "trust" has a numeric model).
 
