@@ -1,0 +1,18 @@
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+      - run: go vet ./...
+      - run: go test ./...
+      - name: bot baseline (seed 1 -> 1650)
+        run: go run ./scripts/run_bot -seed 1 | grep -q 'balance=1650.*done=true'
