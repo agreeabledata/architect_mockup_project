@@ -180,6 +180,101 @@ func TestAcceptWhileActiveNoMutation(t *testing.T) {
 	}
 }
 
+func TestLegalActionsSchemaHasNoReasoning(t *testing.T) {
+	w := New(1)
+	acts := w.LegalActions()
+	assertNoReasoning(t, acts)
+	var sawAccept, sawRefresh bool
+	for _, a := range acts {
+		switch a.Name {
+		case ActionAccept:
+			sawAccept = true
+			prop, _ := a.Parameters["properties"].(map[string]any)
+			if len(prop) != 1 {
+				t.Errorf("accept_quest properties = %v, want only quest_id", prop)
+			}
+			if _, ok := prop["quest_id"]; !ok {
+				t.Fatal("accept_quest missing quest_id")
+			}
+			req, _ := a.Parameters["required"].([]any)
+			if len(req) != 1 || req[0] != "quest_id" {
+				t.Errorf("accept_quest required = %v, want [quest_id]", req)
+			}
+		case ActionRefresh:
+			sawRefresh = true
+			if a.Parameters != nil {
+				t.Errorf("refresh_board Parameters = %v, want nil", a.Parameters)
+			}
+		}
+	}
+	if !sawAccept {
+		t.Fatal("expected accept_quest on a fresh board")
+	}
+	if !sawRefresh {
+		t.Fatal("expected refresh_board on a fresh board")
+	}
+
+	plantDelivery(w, "q-d", 2, PayDeliveryShort)
+	if _, err := w.Apply(ActionAccept, questArgs("q-d")); err != nil {
+		t.Fatal(err)
+	}
+	acts = w.LegalActions()
+	assertNoReasoning(t, acts)
+	if len(acts) != 1 || acts[0].Name != ActionDeliver || acts[0].Parameters != nil {
+		t.Errorf("deliver = %+v, want a nil-param deliver", acts)
+	}
+
+	w = New(1)
+	plantBattle(w, "q-b")
+	if _, err := w.Apply(ActionAccept, questArgs("q-b")); err != nil {
+		t.Fatal(err)
+	}
+	acts = w.LegalActions()
+	assertNoReasoning(t, acts)
+	if len(acts) != 1 || acts[0].Name != ActionFight || acts[0].Parameters != nil {
+		t.Errorf("fight = %+v, want a nil-param fight", acts)
+	}
+}
+
+func assertNoReasoning(t *testing.T, acts []Action) {
+	t.Helper()
+	for _, a := range acts {
+		if schemaHasReasoning(a.Parameters) {
+			t.Errorf("%s schema includes reasoning: %+v", a.Name, a.Parameters)
+		}
+	}
+}
+
+func schemaHasReasoning(v any) bool {
+	switch x := v.(type) {
+	case map[string]any:
+		if _, ok := x["reasoning"]; ok {
+			return true
+		}
+		for _, child := range x {
+			if schemaHasReasoning(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range x {
+			if s, ok := child.(string); ok && s == "reasoning" {
+				return true
+			}
+			if schemaHasReasoning(child) {
+				return true
+			}
+		}
+	case []string:
+		for _, s := range x {
+			if s == "reasoning" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestLegalActionsHidesUnaffordable(t *testing.T) {
 	w := New(1)
 	w.board = []Quest{

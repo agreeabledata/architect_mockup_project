@@ -54,6 +54,9 @@ two small interfaces, so they proceed in parallel without blocking each other:
 3. **Integration** — **done 2026-09-02.** First end-to-end 50-day run:
    `llama3.2:3b` on Ollama, seed 1, 1390 krones in 41 model calls (greedy bot:
    1650). The model fought at 0 and 70 krones and lost both — the trap works.
+   **Office hours 2026-09-03:** that run recorded 41 decisions with zero
+   rationale. Every tool schema the harness sends now requires a `reasoning`
+   string; it is stripped before `Apply` and kept in the transcript.
    Next: remaining quests land one per PR (spec the payout formula, day cost,
    and tool surface as each is built).
 
@@ -217,6 +220,11 @@ written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
   identical decoding settings where the provider supports them (some current
   models reject sampling parameters — divergences get logged); one uniform
   malformed-tool-call policy; full per-run transcripts logged for audit.
+- **Settled 2026-09-03:** add a required `reasoning` string to every tool the
+  harness sends (`actionsToTools` in `harness/agent.go`). Strip it before
+  `Apply` so the engine never sees it; leave the raw call in the transcript.
+  Small models skip free-text content and jump to the tool call; the schema
+  field is the scaffolding that forces a recorded rationale per decision.
 
 ### Eval best-practices notes (from a survey of agent benchmarks)
 
