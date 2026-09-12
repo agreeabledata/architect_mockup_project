@@ -43,7 +43,8 @@ type Outcome struct {
 }
 
 // Game is the deterministic engine surface the harness drives. The engine owns
-// the lifespan ledger; the harness owns its own per-decision iteration cap.
+// the lifespan ledger; the harness owns its own per-run model-call cap and a
+// small per-decision retry cap for cost control.
 type Game interface {
 	// Observe returns the current state the agent sees.
 	Observe() State

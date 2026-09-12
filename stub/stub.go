@@ -20,7 +20,6 @@ const (
 	deliveryPayout = 12
 	fightCost      = 2
 	fightPayout    = 30
-	fightPenalty   = 10
 	restCost       = 1
 )
 
@@ -115,8 +114,8 @@ func (s *Stub) Apply(name string, args json.RawMessage) (engine.Outcome, error) 
 			s.balance += fightPayout
 			msg = fmt.Sprintf("Your attack power %d defeats the warband in %d rounds. You earn %d krones.", dmg, roundsToWin, fightPayout)
 		} else {
-			s.balance -= fightPenalty
-			msg = fmt.Sprintf("Your attack power %d is too weak; the warband overpowers you. You lose %d krones.", dmg, fightPenalty)
+			s.balance -= engine.DuelLossPenalty
+			msg = fmt.Sprintf("Your attack power %d is too weak; the warband overpowers you. You lose %d krones.", dmg, engine.DuelLossPenalty)
 		}
 		s.spend(fightCost)
 		return s.outcome(before, msg), nil
@@ -164,7 +163,7 @@ func (s *Stub) narrative() string {
 		}
 	}
 	if !s.fought {
-		sb = append(sb, fmt.Sprintf("A goblin warband (%d HP) blocks the bridge. Each round it deals %d damage to your %d HP. Your attack power is max(1, floor(krones/10)). Winning pays %d krones, losing costs %d.", opponentHP, opponentDmg, agentHP, fightPayout, fightPenalty))
+		sb = append(sb, fmt.Sprintf("A goblin warband (%d HP) blocks the bridge. Each round it deals %d damage to your %d HP. Your attack power is max(1, floor(krones/10)). Winning pays %d krones, losing costs %d.", opponentHP, opponentDmg, agentHP, fightPayout, engine.DuelLossPenalty))
 	}
 	return strings.Join(sb, " ")
 }

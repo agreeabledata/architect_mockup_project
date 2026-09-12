@@ -19,6 +19,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.IterationCap != 10 {
 		t.Errorf("iteration cap = %d, want default 10", cfg.IterationCap)
 	}
+	if cfg.DecisionRetryCap != 3 {
+		t.Errorf("decision retry cap = %d, want default 3", cfg.DecisionRetryCap)
+	}
 	if got := cfg.ResolveBaseURL(); got != "http://localhost:11434/v1" {
 		t.Errorf("ollama base URL = %q", got)
 	}
@@ -52,13 +55,5 @@ func TestConfigCost(t *testing.T) {
 	}
 	if got := cfg.Cost("local", 500_000, 500_000); got != 0 {
 		t.Errorf("local cost = %v, want 0", got)
-	}
-}
-
-func TestConfigAPIKeyEnv(t *testing.T) {
-	t.Setenv("TEST_HARNESS_KEY", "sekret")
-	cfg := &Config{APIKey: "TEST_HARNESS_KEY"}
-	if got := cfg.APIKey; got != "sekret" {
-		t.Errorf("key = %q", got)
 	}
 }

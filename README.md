@@ -69,13 +69,18 @@ go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 ```
 
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
-it from the example's 10 before expecting a terminal run.
+it from the example's 10 before expecting a terminal run. Within one decision a
+rejected action retries up to `decision_retry_cap` (default 3) calls; the model
+sees only the system prompt plus the last 3 turns (full history is kept in the
+transcript). The windowed context changed the model inputs, so `prompt_version`
+is now `v3` and `config_hash` inputs changed with it: transcripts from before
+that bump are **not comparable** to runs of the same model and seed after it.
 
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
-`"provider": "openrouter"` and `"api_key_env": "OPENROUTER_API_KEY"`, leave
-`base_url` empty (it defaults to `https://openrouter.ai/api/v1`), export the key,
-and run `go run ./scripts/run_agent`. This is the cheapest way to compare several
+`"provider": "openrouter"` and `"api_key": "<your OpenRouter key>"`, leave
+`base_url` empty (it defaults to `https://openrouter.ai/api/v1`), and run
+`go run ./scripts/run_agent`. This is the cheapest way to compare several
 vendors' models under one key and one code path. Note that OpenRouter model IDs
 are `vendor/model` — e.g. `meta-llama/llama-3.3-70b-instruct`, not
 `llama-3.3-70b-instruct` — and that the same string is the `pricing` lookup key,

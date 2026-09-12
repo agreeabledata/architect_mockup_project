@@ -11,24 +11,38 @@ type Pricing struct {
 	OutputPerMillion float64 `json:"output_per_million"`
 }
 
-// Config is the run configuration, loaded from a JSON file. API keys come from
-// the environment, never from the file.
+// Config is the run configuration, loaded from a JSON file. The API key lives
+// in the file (config.json is gitignored); empty means a local model.
 type Config struct {
 	Provider     string              `json:"provider"` // openai | deepseek | openrouter | ollama | anthropic
 	Model        string              `json:"model"`
 	BaseURL      string              `json:"base_url"` // empty = provider default (openai-compat only)
-	APIKey       string              `json:"api_key"`  // env var holding the key; empty = local model
+	APIKey       string              `json:"api_key"`  // API key; empty = local model
 	MaxTokens    int64               `json:"max_tokens"`
 	Temperature  *float64            `json:"temperature"`
 	TopP         *float64            `json:"top_p"`
 	Seed         *int64              `json:"seed"`
-	IterationCap int                 `json:"iteration_cap"` // hard per-decision cap; the main cost control
+	IterationCap int                 `json:"iteration_cap"` // hard cap on model calls per run; the main cost control
 	Pricing      map[string]*Pricing `json:"pricing"`       // per-model; nil entry = free/local
+	// DecisionRetryCap is the most model calls one decision may use: an
+	// action the engine rejects retries (up to this) instead of burning the
+	// per-run budget re-deciding the same state. Zero = 3.
+	DecisionRetryCap int `json:"decision_retry_cap"`
 }
 
-// baseURLs are the OpenAI-compatible defaults per provider. The matching key
-// env vars are OPENAI_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY (Ollama
-// needs none); each run names one in its config's api_key_env.
+const defaultDecisionRetryCap = 3
+
+// DecisionRetryCapOrDefault returns the configured per-decision retry cap, or
+// the default when unset. Configs built without LoadConfig still get a cap.
+func (c *Config) DecisionRetryCapOrDefault() int {
+	if c.DecisionRetryCap < 1 {
+		return defaultDecisionRetryCap
+	}
+	return c.DecisionRetryCap
+}
+
+// baseURLs are the OpenAI-compatible defaults per provider. Each provider's
+// key is set in the run config's api_key (Ollama needs none).
 var baseURLs = map[string]string{
 	"openai":     "https://api.openai.com/v1",
 	"deepseek":   "https://api.deepseek.com",
@@ -48,6 +62,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if c.IterationCap == 0 {
 		c.IterationCap = 10
+	}
+	if c.DecisionRetryCap == 0 {
+		c.DecisionRetryCap = defaultDecisionRetryCap
 	}
 	return &c, nil
 }

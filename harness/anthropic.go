@@ -51,7 +51,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 			var b strings.Builder
 			b.WriteString(m.Content)
 			params.System = append(params.System, anthropic.TextBlockParam{Text: b.String()})
-		case RoleUser:
+		case RoleUser, RoleTool:
 			if m.ToolCallID != "" {
 				params.Messages = append(params.Messages, anthropic.NewUserMessage(
 					anthropic.NewToolResultBlock(m.ToolCallID, m.Content, false),
@@ -131,15 +131,17 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 }
 
 func stringSlice(v any) []string {
-	var out []string
-	raw, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-	for _, s := range raw {
-		if str, ok := s.(string); ok {
-			out = append(out, str)
+	switch raw := v.(type) {
+	case []string:
+		return raw
+	case []any:
+		out := make([]string, 0, len(raw))
+		for _, s := range raw {
+			if str, ok := s.(string); ok {
+				out = append(out, str)
+			}
 		}
+		return out
 	}
-	return out
+	return nil
 }

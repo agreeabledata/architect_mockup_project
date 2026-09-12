@@ -1,6 +1,10 @@
 package stub
 
-import "testing"
+import (
+	"testing"
+
+	"architect_mockup_project/engine"
+)
 
 func TestStubDelivery(t *testing.T) {
 	s := New()
@@ -43,8 +47,8 @@ func TestStubFightMath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Balance != -fightPenalty {
-		t.Errorf("poor balance = %d, want %d", out.Balance, -fightPenalty)
+	if out.Balance != -engine.DuelLossPenalty {
+		t.Errorf("poor balance = %d, want %d", out.Balance, -engine.DuelLossPenalty)
 	}
 }
 
