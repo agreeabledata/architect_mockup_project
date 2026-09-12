@@ -1,11 +1,15 @@
 package harness
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"slices"
 	"testing"
 
+	"architect_mockup_project/engine"
 	"architect_mockup_project/stub"
 )
 
@@ -24,6 +28,266 @@ func (p *scriptedProvider) Chat(_ context.Context, msgs []Message, _ []Tool, opt
 	res := p.plan[p.calls]
 	p.calls++
 	return res, nil
+}
+
+func TestActionsToToolsInjectsReasoning(t *testing.T) {
+	t.Run("nil params", func(t *testing.T) {
+		tools := actionsToTools([]engine.Action{{Name: "rest", Description: "do nothing"}})
+		if len(tools) != 1 {
+			t.Fatalf("len(tools) = %d, want 1", len(tools))
+		}
+		assertReasoningSchema(t, tools[0].Parameters)
+		if _, ok := tools[0].Parameters["properties"].(map[string]any)["quest_id"]; ok {
+			t.Fatal("nil-param tool should only have reasoning")
+		}
+		if got := requiredStrings(t, tools[0].Parameters); !slices.Equal(got, []string{reasoningParam}) {
+			t.Errorf("required = %v, want [%s]", got, reasoningParam)
+		}
+	})
+
+	t.Run("accept_quest keeps quest_id", func(t *testing.T) {
+		orig := map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"quest_id": map[string]any{
+					"type": "string",
+					"enum": []string{"q-d"},
+				},
+			},
+			"required": []any{"quest_id"},
+		}
+		tools := actionsToTools([]engine.Action{{Name: "accept_quest", Parameters: orig}})
+		params := tools[0].Parameters
+		assertReasoningSchema(t, params)
+		props := params["properties"].(map[string]any)
+		qid, ok := props["quest_id"].(map[string]any)
+		if !ok {
+			t.Fatal("quest_id property missing")
+		}
+		enum, _ := qid["enum"].([]string)
+		if !slices.Equal(enum, []string{"q-d"}) {
+			t.Errorf("quest_id enum = %v, want [q-d]", enum)
+		}
+		if got := requiredStrings(t, params); !slices.Equal(got, []string{reasoningParam, "quest_id"}) {
+			t.Errorf("required = %v, want [%s quest_id]", got, reasoningParam)
+		}
+	})
+
+	t.Run("does not mutate engine.World", func(t *testing.T) {
+		w := engine.New(1)
+		_ = actionsToTools(w.LegalActions())
+		for _, a := range w.LegalActions() {
+			if schemaMentionsReasoning(a.Parameters) {
+				t.Errorf("engine %s schema gained reasoning: %+v", a.Name, a.Parameters)
+			}
+			if a.Name != "accept_quest" {
+				if a.Parameters != nil {
+					t.Errorf("engine %s Parameters = %v, want nil", a.Name, a.Parameters)
+				}
+				continue
+			}
+			req := requiredStrings(t, a.Parameters)
+			if !slices.Equal(req, []string{"quest_id"}) {
+				t.Errorf("engine accept_quest required = %v, want [quest_id]", req)
+			}
+		}
+	})
+}
+
+func schemaMentionsReasoning(v any) bool {
+	switch x := v.(type) {
+	case map[string]any:
+		if _, ok := x[reasoningParam]; ok {
+			return true
+		}
+		for _, child := range x {
+			if schemaMentionsReasoning(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range x {
+			if s, ok := child.(string); ok && s == reasoningParam {
+				return true
+			}
+			if schemaMentionsReasoning(child) {
+				return true
+			}
+		}
+	case []string:
+		return slices.Contains(x, reasoningParam)
+	}
+	return false
+}
+
+func TestStripReasoning(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		if got := stripReasoning(nil); got != nil {
+			t.Errorf("stripReasoning(nil) = %s, want nil", got)
+		}
+	})
+	t.Run("reasoning only", func(t *testing.T) {
+		got := stripReasoning(json.RawMessage(`{"reasoning":"short is 30/day"}`))
+		assertJSONMap(t, got, map[string]any{})
+	})
+	t.Run("reasoning and quest_id", func(t *testing.T) {
+		got := stripReasoning(json.RawMessage(`{"reasoning":"short is 30/day","quest_id":"q-d"}`))
+		assertJSONMap(t, got, map[string]any{"quest_id": "q-d"})
+	})
+}
+
+func TestAgentStripsReasoningBeforeApply(t *testing.T) {
+	raw := json.RawMessage(`{"reasoning":"short is 30/day","quest_id":"q-d"}`)
+	prov := &scriptedProvider{plan: []Result{
+		{
+			Content:    "Take the short run.",
+			ToolCalls:  []ToolCall{{ID: "c1", Name: "accept_quest", Arguments: raw}},
+			StopReason: StopReasonToolCalls,
+		},
+		{Content: "Done.", StopReason: StopReasonStop},
+	}}
+	dir := t.TempDir()
+	tr, err := NewTranscript(dir, testConfig(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &recordingGame{}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
+	if _, err := agent.Run(context.Background(), g); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(g.applies) != 1 {
+		t.Fatalf("Apply called %d times, want 1", len(g.applies))
+	}
+	assertJSONMap(t, g.applies[0].args, map[string]any{"quest_id": "q-d"})
+	if bytes.Contains(g.applies[0].args, []byte(reasoningParam)) {
+		t.Errorf("Apply args still contain reasoning: %s", g.applies[0].args)
+	}
+
+	last := prov.gotMsgs[len(prov.gotMsgs)-1]
+	var kept bool
+	for _, m := range last {
+		if m.Role != RoleAssistant {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if string(tc.Arguments) == string(raw) {
+				kept = true
+			}
+		}
+	}
+	if !kept {
+		t.Error("conversation history lost the original reasoning arguments")
+	}
+
+	body, err := os.ReadFile(tr.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(body), []byte("\n"))
+	if len(lines) < 2 {
+		t.Fatalf("transcript lines = %d, want header plus at least one record", len(lines))
+	}
+	if !bytes.Contains(lines[1], []byte(`"reasoning":"short is 30/day"`)) {
+		t.Errorf("transcript did not keep reasoning: %s", lines[1])
+	}
+}
+
+func assertReasoningSchema(t *testing.T, params map[string]any) {
+	t.Helper()
+	if params == nil {
+		t.Fatal("Parameters is nil")
+	}
+	if params["type"] != "object" {
+		t.Errorf("type = %v, want object", params["type"])
+	}
+	props, ok := params["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties is %T, want map", params["properties"])
+	}
+	r, ok := props[reasoningParam].(map[string]any)
+	if !ok {
+		t.Fatal("reasoning property missing")
+	}
+	if r["type"] != "string" {
+		t.Errorf("reasoning type = %v, want string", r["type"])
+	}
+}
+
+func requiredStrings(t *testing.T, params map[string]any) []string {
+	t.Helper()
+	switch req := params["required"].(type) {
+	case []any:
+		out := make([]string, len(req))
+		for i, x := range req {
+			s, ok := x.(string)
+			if !ok {
+				t.Fatalf("required[%d] = %T, want string", i, x)
+			}
+			out[i] = s
+		}
+		return out
+	case []string:
+		return req
+	default:
+		t.Fatalf("required is %T", params["required"])
+		return nil
+	}
+}
+
+func assertJSONMap(t *testing.T, raw json.RawMessage, want map[string]any) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal %s: %v", raw, err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("json %s: got %d keys, want %d (%v)", raw, len(got), len(want), want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("json %s: %s = %v, want %v", raw, k, got[k], v)
+		}
+	}
+}
+
+type applyCall struct {
+	name string
+	args json.RawMessage
+}
+
+type recordingGame struct {
+	applies []applyCall
+}
+
+func (g *recordingGame) Observe() engine.State {
+	return engine.State{Narrative: "a board"}
+}
+
+func (g *recordingGame) LegalActions() []engine.Action {
+	return []engine.Action{{
+		Name: "accept_quest",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"quest_id": map[string]any{
+					"type": "string",
+					"enum": []string{"q-d"},
+				},
+			},
+			"required": []any{"quest_id"},
+		},
+	}}
+}
+
+func (g *recordingGame) Apply(name string, args json.RawMessage) (engine.Outcome, error) {
+	copied := append(json.RawMessage(nil), args...)
+	g.applies = append(g.applies, applyCall{name: name, args: copied})
+	return engine.Outcome{Narrative: "ok"}, nil
 }
 
 func testConfig(cap int) *Config {

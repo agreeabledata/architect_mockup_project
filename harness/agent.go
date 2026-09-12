@@ -2,12 +2,15 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"architect_mockup_project/engine"
 )
+
+const reasoningParam = "reasoning"
 
 // promptVersion hashes every run transcript to the prompt it used.
 const promptVersion = "v3"
@@ -62,9 +65,87 @@ func lastTurns(msgs []Message, turns int) []Message {
 func actionsToTools(actions []engine.Action) []Tool {
 	tools := make([]Tool, 0, len(actions))
 	for _, a := range actions {
-		tools = append(tools, Tool{Name: a.Name, Description: a.Description, Parameters: a.Parameters})
+		tools = append(tools, Tool{
+			Name:        a.Name,
+			Description: a.Description,
+			Parameters:  withReasoning(a.Parameters),
+		})
 	}
 	return tools
+}
+
+// withReasoning copies an engine action schema and requires a reasoning string
+// so the model cannot call a tool without writing why. The copy is deliberate:
+// LegalActions reuses its maps, and the engine must not learn this field.
+func withReasoning(params map[string]any) map[string]any {
+	out := map[string]any{"type": "object"}
+	props := map[string]any{}
+	required := []any{reasoningParam}
+	if params != nil {
+		if t, ok := params["type"]; ok {
+			out["type"] = t
+		}
+		if p, ok := params["properties"].(map[string]any); ok {
+			for k, v := range p {
+				props[k] = v
+			}
+		}
+		if req, ok := params["required"]; ok {
+			required = prependRequired(req)
+		}
+		for k, v := range params {
+			if k == "type" || k == "properties" || k == "required" {
+				continue
+			}
+			out[k] = v
+		}
+	}
+	props[reasoningParam] = map[string]any{
+		"type":        "string",
+		"description": "Why this action is the best use of remaining days, given the arithmetic of the options.",
+	}
+	out["properties"] = props
+	out["required"] = required
+	return out
+}
+
+func prependRequired(v any) []any {
+	out := []any{reasoningParam}
+	switch req := v.(type) {
+	case []any:
+		for _, x := range req {
+			if s, ok := x.(string); ok && s == reasoningParam {
+				continue
+			}
+			out = append(out, x)
+		}
+	case []string:
+		for _, s := range req {
+			if s == reasoningParam {
+				continue
+			}
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// stripReasoning removes the harness-only reasoning field so Apply sees engine
+// args. Malformed JSON is left alone for Apply to reject.
+func stripReasoning(args json.RawMessage) json.RawMessage {
+	if len(args) == 0 {
+		return args
+	}
+	var m map[string]any
+	if err := json.Unmarshal(args, &m); err != nil {
+		return args
+	}
+	delete(m, reasoningParam)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return args
+	}
+	return b
 }
 
 // Agent drives one game run: observe -> chat -> apply until the run is terminal
@@ -148,7 +229,7 @@ decisions:
 			}
 			for _, tc := range res.ToolCalls {
 				report.ToolCalls++
-				outcome, err := g.Apply(tc.Name, tc.Arguments)
+				outcome, err := g.Apply(tc.Name, stripReasoning(tc.Arguments))
 				if err != nil {
 					outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
 				} else {

@@ -54,6 +54,9 @@ two small interfaces, so they proceed in parallel without blocking each other:
 3. **Integration** — **done 2026-09-02.** First end-to-end 50-day run:
    `llama3.2:3b` on Ollama, seed 1, 1390 krones in 41 model calls (greedy bot:
    1650). The model fought at 0 and 70 krones and lost both — the trap works.
+   **Office hours 2026-09-03:** that run recorded 41 decisions with zero
+   rationale. Every tool schema the harness sends now requires a `reasoning`
+   string; it is stripped before `Apply` and kept in the transcript.
    Next: remaining quests land one per PR (spec the payout formula, day cost,
    and tool surface as each is built).
 
@@ -70,8 +73,20 @@ it from the example's 10 before expecting a terminal run. Within one decision a
 rejected action retries up to `decision_retry_cap` (default 3) calls; the model
 sees only the system prompt plus the last 3 turns (full history is kept in the
 transcript). The windowed context changed the model inputs, so `prompt_version`
-is now `v2` and `config_hash` inputs changed with it: transcripts from before
+is now `v3` and `config_hash` inputs changed with it: transcripts from before
 that bump are **not comparable** to runs of the same model and seed after it.
+
+**Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
+Completions API, so it reuses the existing client — no new provider code. Set
+`"provider": "openrouter"` and `"api_key": "<your OpenRouter key>"`, leave
+`base_url` empty (it defaults to `https://openrouter.ai/api/v1`), and run
+`go run ./scripts/run_agent`. This is the cheapest way to compare several
+vendors' models under one key and one code path. Note that OpenRouter model IDs
+are `vendor/model` — e.g. `meta-llama/llama-3.3-70b-instruct`, not
+`llama-3.3-70b-instruct` — and that the same string is the `pricing` lookup key,
+so a model with no matching entry reports $0.00. OpenRouter's per-model rates
+depend on which upstream provider it routes to, so confirm the current numbers
+rather than trusting the example config's.
 
 **Process:** small PRs to `main`; apprentices cross-review each other's PRs and
 tag Davis + Marissa; one issue per quest or workstream, with next-step
@@ -210,6 +225,11 @@ written; Arcane Dispersal is the likely next one in; Survival Trek is deferred.
   identical decoding settings where the provider supports them (some current
   models reject sampling parameters — divergences get logged); one uniform
   malformed-tool-call policy; full per-run transcripts logged for audit.
+- **Settled 2026-09-03:** add a required `reasoning` string to every tool the
+  harness sends (`actionsToTools` in `harness/agent.go`). Strip it before
+  `Apply` so the engine never sees it; leave the raw call in the transcript.
+  Small models skip free-text content and jump to the tool call; the schema
+  field is the scaffolding that forces a recorded rationale per decision.
 
 ### Eval best-practices notes (from a survey of agent benchmarks)
 

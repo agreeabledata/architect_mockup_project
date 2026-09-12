@@ -63,12 +63,12 @@ func main() {
 
 func newProvider(cfg *harness.Config) (harness.Provider, error) {
 	switch cfg.Provider {
-	case "openai", "deepseek", "ollama":
-		return harness.NewOpenAICompatProvider(cfg.ResolveBaseURL(), cfg.APIKey())
+	case "openai", "deepseek", "openrouter", "ollama":
+		return harness.NewOpenAICompatProvider(cfg.ResolveBaseURL(), cfg.APIKey)
 	case "anthropic":
-		return harness.NewAnthropicProvider(cfg.APIKey(), ""), nil
+		return harness.NewAnthropicProvider(cfg.APIKey, ""), nil
 	}
-	return nil, fmt.Errorf("unknown provider %q (want openai|deepseek|ollama|anthropic)", cfg.Provider)
+	return nil, fmt.Errorf("unknown provider %q (want openai|deepseek|openrouter|ollama|anthropic)", cfg.Provider)
 }
 
 func fail(format string, args ...any) {

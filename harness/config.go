@@ -11,13 +11,13 @@ type Pricing struct {
 	OutputPerMillion float64 `json:"output_per_million"`
 }
 
-// Config is the run configuration, loaded from a JSON file. API keys come from
-// the environment, never from the file.
+// Config is the run configuration, loaded from a JSON file. The API key lives
+// in the file (config.json is gitignored); empty means a local model.
 type Config struct {
-	Provider     string              `json:"provider"` // openai | deepseek | ollama | anthropic
+	Provider     string              `json:"provider"` // openai | deepseek | openrouter | ollama | anthropic
 	Model        string              `json:"model"`
-	BaseURL      string              `json:"base_url"`    // empty = provider default (openai-compat only)
-	APIKeyEnv    string              `json:"api_key_env"` // env var holding the key; empty = local model
+	BaseURL      string              `json:"base_url"` // empty = provider default (openai-compat only)
+	APIKey       string              `json:"api_key"`  // API key; empty = local model
 	MaxTokens    int64               `json:"max_tokens"`
 	Temperature  *float64            `json:"temperature"`
 	TopP         *float64            `json:"top_p"`
@@ -41,11 +41,13 @@ func (c *Config) DecisionRetryCapOrDefault() int {
 	return c.DecisionRetryCap
 }
 
-// baseURLs are the OpenAI-compatible defaults per provider.
+// baseURLs are the OpenAI-compatible defaults per provider. Each provider's
+// key is set in the run config's api_key (Ollama needs none).
 var baseURLs = map[string]string{
-	"openai":   "https://api.openai.com/v1",
-	"deepseek": "https://api.deepseek.com",
-	"ollama":   "http://localhost:11434/v1",
+	"openai":     "https://api.openai.com/v1",
+	"deepseek":   "https://api.deepseek.com",
+	"openrouter": "https://openrouter.ai/api/v1",
+	"ollama":     "http://localhost:11434/v1",
 }
 
 // LoadConfig reads config from path and applies defaults.
@@ -65,14 +67,6 @@ func LoadConfig(path string) (*Config, error) {
 		c.DecisionRetryCap = defaultDecisionRetryCap
 	}
 	return &c, nil
-}
-
-// APIKey returns the configured API key from the environment, or "" if none.
-func (c *Config) APIKey() string {
-	if c.APIKeyEnv == "" {
-		return ""
-	}
-	return os.Getenv(c.APIKeyEnv)
 }
 
 // ResolveBaseURL returns the effective base URL for an openai-compat provider.
