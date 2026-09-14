@@ -66,6 +66,8 @@ two small interfaces, so they proceed in parallel without blocking each other:
 cp config.example.json config.json   # pick a provider; local Ollama needs no key
 go run ./scripts/run_agent -seed 1   # real engine; add -stub for the stub
 go run ./scripts/run_bot -seed 1     # scripted baseline, no model
+go run ./scripts/replay transcripts/run_….jsonl   # one line per turn, from kind=="turn"
+go run ./scripts/compare -seeds 1,2,3 -configs bot,config.json
 ```
 
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
@@ -77,8 +79,9 @@ is now `v3` and `config_hash` inputs changed with it: transcripts from before
 that bump are **not comparable** to runs of the same model and seed after it.
 
 Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
-Replay and comparison tools should filter `kind=="turn"` for day, balance,
-action, and payout — those numbers come from the engine `Outcome`, not the prose.
+`scripts/replay` prints one terminal line per `kind=="turn"` record. `scripts/compare`
+runs the greedy bot as the baseline, then each config on each seed, and prints a
+markdown table whose numbers come from those structured records — not the prose.
 
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
