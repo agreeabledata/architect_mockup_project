@@ -56,4 +56,14 @@ func TestConfigCost(t *testing.T) {
 	if got := cfg.Cost("local", 500_000, 500_000); got != 0 {
 		t.Errorf("local cost = %v, want 0", got)
 	}
+	if !cfg.Priced("m") {
+		t.Error("m should be priced")
+	}
+	if cfg.Priced("local") {
+		t.Error("missing model must not be Priced")
+	}
+	cfg.Pricing["free"] = &Pricing{}
+	if !cfg.Priced("free") {
+		t.Error("explicit zero-rate entry is priced (free, not n/a)")
+	}
 }

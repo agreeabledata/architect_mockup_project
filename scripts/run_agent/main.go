@@ -29,9 +29,13 @@ func main() {
 	if err != nil {
 		fail("config: %v", err)
 	}
-	report, path, err := harness.RunEpisode(context.Background(), cfg, game, "transcripts")
+	prov, err := harness.NewProvider(cfg)
 	if err != nil {
-		fail("%v", err)
+		fail("run: %v", err)
+	}
+	report, path, err := harness.RunEpisode(context.Background(), prov, cfg, game, "transcripts", uint32(*seed))
+	if err != nil {
+		fail("run: %v", err)
 	}
 
 	fmt.Printf("provider      %s (%s)\n", cfg.Provider, cfg.Model)

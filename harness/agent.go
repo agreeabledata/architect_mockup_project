@@ -181,7 +181,6 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	retryCap := a.Config.DecisionRetryCapOrDefault()
 	var report Report
 	startRemaining := g.Observe().LifespanDays
-	turn := 0
 decisions:
 	for {
 		if report.Iterations >= a.Config.IterationCap {
@@ -220,7 +219,9 @@ decisions:
 			report.Iterations++
 			report.Usage = addUsage(report.Usage, res.Usage)
 			if a.Transcript != nil {
-				a.Transcript.Record(msgs, res)
+				if err := a.Transcript.Record(msgs, res); err != nil {
+					return report, fmt.Errorf("transcript: %w", err)
+				}
 			}
 
 			assistant := Message{Role: RoleAssistant, Content: res.Content, ToolCalls: res.ToolCalls}
@@ -234,9 +235,10 @@ decisions:
 				before := g.Observe()
 				stripped := stripReasoning(tc.Arguments)
 				outcome, err := g.Apply(tc.Name, stripped)
-				turn++
 				if a.Transcript != nil {
-					a.Transcript.RecordTurn(newTurnRecord(turn, startRemaining, before, tc.Name, stripped, outcome, err))
+					if recErr := a.Transcript.RecordTurn(newTurnRecord(report.ToolCalls, startRemaining, before, tc.Name, stripped, outcome, err)); recErr != nil {
+						return report, fmt.Errorf("transcript: %w", recErr)
+					}
 				}
 				if err != nil {
 					outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
@@ -264,15 +266,15 @@ decisions:
 // narrative text. A rejected Apply uses the pre-action state and sets error.
 func newTurnRecord(turn, startRemaining int, before engine.State, action string, args json.RawMessage, outcome engine.Outcome, err error) TurnRecord {
 	rec := TurnRecord{
-		Turn:    turn,
-		Day:     startRemaining - before.LifespanDays,
-		Balance: before.Balance,
-		Action:  action,
-		Args:    parseTurnArgs(args),
+		Turn:   turn,
+		Action: action,
+		Args:   parseTurnArgs(args),
 	}
 	if err != nil {
 		msg := err.Error()
 		rec.Error = &msg
+		rec.Day = startRemaining - before.LifespanDays
+		rec.Balance = before.Balance
 		return rec
 	}
 	rec.Day = startRemaining - outcome.LifespanDays

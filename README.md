@@ -68,6 +68,7 @@ go run ./scripts/run_agent -seed 1   # real engine; add -stub for the stub
 go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 go run ./scripts/replay transcripts/run_….jsonl   # one line per turn, from kind=="turn"
 go run ./scripts/compare -seeds 1,2,3 -configs bot,config.json
+# optional: -transcripts dir  (default transcripts)
 ```
 
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
@@ -79,9 +80,18 @@ is now `v3` and `config_hash` inputs changed with it: transcripts from before
 that bump are **not comparable** to runs of the same model and seed after it.
 
 Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
-`scripts/replay` prints one terminal line per `kind=="turn"` record. `scripts/compare`
+Files from before #29 have no `kind` and will not replay; re-run the agent.
+On each `kind=="turn"` record, `day` and `balance` are the state after a
+successful action (balance already includes `earned`) and the unchanged
+pre-action state on reject; `scripts/replay` prints that recorded state
+(success lines as `day before→after  bal before→after`). `scripts/compare`
 runs the greedy bot as the baseline, then each config on each seed, and prints a
 markdown table whose numbers come from those structured records — not the prose.
+A `finished n/m` column counts runs that reached `terminal`; non-terminal
+reasons (`iteration_cap`, `decision_cap`, `no_action`) are printed on stderr
+and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
+(default `transcripts`). The header's `seed` is the model sampling seed;
+`engine_seed` is the world seed.
 
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
@@ -91,7 +101,7 @@ Completions API, so it reuses the existing client — no new provider code. Set
 vendors' models under one key and one code path. Note that OpenRouter model IDs
 are `vendor/model` — e.g. `meta-llama/llama-3.3-70b-instruct`, not
 `llama-3.3-70b-instruct` — and that the same string is the `pricing` lookup key,
-so a model with no matching entry reports $0.00. OpenRouter's per-model rates
+so a model with no matching entry reports n/a, not $0.00. OpenRouter's per-model rates
 depend on which upstream provider it routes to, so confirm the current numbers
 rather than trusting the example config's.
 

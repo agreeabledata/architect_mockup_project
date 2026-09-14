@@ -23,7 +23,7 @@ type Config struct {
 	TopP         *float64            `json:"top_p"`
 	Seed         *int64              `json:"seed"`
 	IterationCap int                 `json:"iteration_cap"` // hard cap on model calls per run; the main cost control
-	Pricing      map[string]*Pricing `json:"pricing"`       // per-model; nil entry = free/local
+	Pricing      map[string]*Pricing `json:"pricing"`       // per-model; missing = unpriced (n/a); explicit zeros = free
 	// DecisionRetryCap is the most model calls one decision may use: an
 	// action the engine rejects retries (up to this) instead of burning the
 	// per-run budget re-deciding the same state. Zero = 3.
@@ -77,7 +77,18 @@ func (c *Config) ResolveBaseURL() string {
 	return baseURLs[c.Provider]
 }
 
-// Cost returns the dollar cost of token usage on a model, or 0 for free/local.
+// Priced reports whether model has a pricing entry. Missing keys are not free;
+// they are unpriced (compare prints n/a). An explicit zero-rate entry is free.
+func (c *Config) Priced(model string) bool {
+	if c == nil {
+		return false
+	}
+	p, ok := c.Pricing[model]
+	return ok && p != nil
+}
+
+// Cost returns the dollar cost of token usage on a model, or 0 for free/local
+// and for models with no pricing entry. Call Priced to distinguish those.
 func (c *Config) Cost(model string, in, out int64) float64 {
 	p := c.Pricing[model]
 	if p == nil {

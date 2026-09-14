@@ -19,7 +19,7 @@ func TestFormatTurnIssueExample(t *testing.T) {
 				Day: 14, Balance: 380, Action: "deliver",
 				Args: map[string]any{}, Earned: 100, DaysSpent: 3,
 			},
-			want: "day 14  bal 380  deliver             +100  (3 days)",
+			want: "day 11→14  bal 280→380  deliver                   +100  (3 days)",
 		},
 		{
 			name: "fight with reasoning",
@@ -28,7 +28,7 @@ func TestFormatTurnIssueExample(t *testing.T) {
 				Args: map[string]any{}, Earned: 120, DaysSpent: 2,
 			},
 			reasoning: "balance over 150, fight unlocked",
-			want:      `day 17  bal 480  fight               +120  (2 days)   reasoning: "balance over 150, fight unlocked"`,
+			want:      `day 15→17  bal 360→480  fight                     +120  (2 days)   reasoning: "balance over 150, fight unlocked"`,
 		},
 		{
 			name: "rejected accept",
@@ -37,7 +37,7 @@ func TestFormatTurnIssueExample(t *testing.T) {
 				Args:  map[string]any{"quest_id": "q7"},
 				Error: &invalid,
 			},
-			want: "day 19  bal 600  accept_quest q7     invalid: already on a quest",
+			want: "day 19  bal 600  accept_quest q7           invalid: already on a quest",
 		},
 	}
 	for _, tt := range tests {
@@ -55,7 +55,7 @@ func TestFormatTurnOneDay(t *testing.T) {
 		Day: 1, Balance: 0, Action: "refresh_board",
 		Args: map[string]any{}, Earned: 0, DaysSpent: 1,
 	}, "")
-	want := "day 1  bal 0  refresh_board       +0  (1 day)"
+	want := "day 0→1  bal 0→0  refresh_board             +0  (1 day)"
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -76,9 +76,9 @@ func TestReplayReadsTurnRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"day 14  bal 380  deliver             +100  (3 days)",
-		`day 17  bal 480  fight               +120  (2 days)   reasoning: "balance over 150, fight unlocked"`,
-		"day 19  bal 600  accept_quest q7     invalid: already on a quest",
+		"day 11→14  bal 280→380  deliver                   +100  (3 days)",
+		`day 15→17  bal 360→480  fight                     +120  (2 days)   reasoning: "balance over 150, fight unlocked"`,
+		"day 19  bal 600  accept_quest q7           invalid: already on a quest",
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("lines = %d, want %d: %#v", len(lines), len(want), lines)

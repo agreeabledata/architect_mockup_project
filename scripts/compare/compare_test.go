@@ -38,16 +38,16 @@ func TestParseSeeds(t *testing.T) {
 
 func TestFormatTable(t *testing.T) {
 	got := formatTable([]row{
-		{model: "bot", seeds: "1,2,3", meanBal: 1650, gap: 0, calls: 0, cost: 0},
-		{model: "llama3.2", seeds: "1,2,3", meanBal: 1390, gap: -260, calls: 41, inTok: 50000, outTok: 2000, invalid: 4, cost: 0.0123},
+		{model: "bot", seeds: "1,2,3", meanBal: 1650, gap: 0, finished: 3, total: 3, costOK: true},
+		{model: "llama3.2", seeds: "1,2,3", meanBal: 1390, gap: -260, finished: 3, total: 3, calls: 41, inTok: 50000, outTok: 2000, invalid: 4, cost: 0.0123, costOK: true},
 	})
-	if !strings.Contains(got, "| model | seeds | mean final balance | gap to bot | model calls | input tok | output tok | invalid actions | est. cost |") {
+	if !strings.Contains(got, "| model | seeds | mean final balance | gap to bot | finished | model calls | input tok | output tok | invalid actions | est. cost |") {
 		t.Fatalf("missing header:\n%s", got)
 	}
-	if !strings.Contains(got, "| bot | 1,2,3 | 1650 | +0 | 0 | 0 | 0 | 0 | $0.0000 |") {
+	if !strings.Contains(got, "| bot | 1,2,3 | 1650 | +0 | 3/3 | 0 | 0 | 0 | 0 | $0.0000 |") {
 		t.Fatalf("bot row:\n%s", got)
 	}
-	if !strings.Contains(got, "| llama3.2 | 1,2,3 | 1390 | -260 | 41 | 50000 | 2000 | 4 | $0.0123 |") {
+	if !strings.Contains(got, "| llama3.2 | 1,2,3 | 1390 | -260 | 3/3 | 41 | 50000 | 2000 | 4 | $0.0123 |") {
 		t.Fatalf("model row:\n%s", got)
 	}
 }
@@ -57,8 +57,8 @@ func TestAggregateMeanAndCost(t *testing.T) {
 		"m": {InputPerMillion: 1, OutputPerMillion: 2},
 	}}
 	r := aggregate("m", []uint32{1, 2}, []harness.RunStats{
-		{FinalBalance: 100, ModelCalls: 2, InputTokens: 500_000, OutputTokens: 0, InvalidActions: 1},
-		{FinalBalance: 200, ModelCalls: 3, InputTokens: 0, OutputTokens: 500_000, InvalidActions: 0},
+		{FinalBalance: 100, ModelCalls: 2, InputTokens: 500_000, OutputTokens: 0, InvalidActions: 1, Reason: "terminal"},
+		{FinalBalance: 200, ModelCalls: 3, InputTokens: 0, OutputTokens: 500_000, InvalidActions: 0, Reason: "terminal"},
 	}, cfg, 180)
 	if r.meanBal != 150 {
 		t.Errorf("mean = %v, want 150", r.meanBal)
@@ -72,6 +72,22 @@ func TestAggregateMeanAndCost(t *testing.T) {
 	if r.cost != 0.5+1.0 {
 		t.Errorf("cost = %v, want 1.5", r.cost)
 	}
+	if !r.costOK || r.finished != 2 || r.total != 2 {
+		t.Errorf("costOK/finished = %v %d/%d", r.costOK, r.finished, r.total)
+	}
+
+	unpriced := aggregate("x", []uint32{1}, []harness.RunStats{
+		{FinalBalance: 10, Reason: "no_action"},
+	}, &harness.Config{Model: "x"}, 0)
+	if unpriced.costOK {
+		t.Error("missing pricing must not be costOK")
+	}
+	if formatCost(unpriced) != "n/a" {
+		t.Errorf("cost cell = %s, want n/a", formatCost(unpriced))
+	}
+	if unpriced.finished != 0 || unpriced.nonterm != "no_action" {
+		t.Errorf("finished/nonterm = %d %q", unpriced.finished, unpriced.nonterm)
+	}
 }
 
 func TestCompareBotOnly(t *testing.T) {
@@ -81,7 +97,7 @@ func TestCompareBotOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "| bot | 1 | 1650 | +0 | 0 | 0 | 0 | 0 | $0.0000 |") {
+	if !strings.Contains(got, "| bot | 1 | 1650 | +0 | 1/1 | 0 | 0 | 0 | 0 | $0.0000 |") {
 		t.Fatalf("table:\n%s\nstderr:\n%s", got, errb.String())
 	}
 	if !strings.Contains(errb.String(), "bot  seed 1  balance 1650") {
@@ -128,5 +144,79 @@ func TestCompareReadsTranscriptNumbers(t *testing.T) {
 	}
 	if st.FinalBalance != 100 || st.ModelCalls != 1 || st.InputTokens != 10 || st.OutputTokens != 4 || st.InvalidActions != 1 {
 		t.Errorf("stats = %+v", st)
+	}
+}
+
+type stubProvider struct{}
+
+func (stubProvider) Chat(_ context.Context, _ []harness.Message, _ []harness.Tool, _ harness.CallOptions) (harness.Result, error) {
+	return harness.Result{Content: "nope", StopReason: harness.StopReasonStop}, nil
+}
+
+func TestCompareModelPathNoAction(t *testing.T) {
+	orig := newProvider
+	t.Cleanup(func() { newProvider = orig })
+	newProvider = func(*harness.Config) (harness.Provider, error) {
+		return stubProvider{}, nil
+	}
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "m.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"provider":"ollama","model":"fake-model","seed":99,"iteration_cap":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errb bytes.Buffer
+	if err := runCompare(context.Background(), []uint32{1}, []string{cfgPath}, dir, &out, &errb); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "fake-model") {
+		t.Fatalf("table missing model:\n%s", got)
+	}
+	if !strings.Contains(got, "| 0/1 |") {
+		t.Fatalf("finished column:\n%s", got)
+	}
+	if !strings.Contains(got, "n/a") {
+		t.Fatalf("unpriced cost:\n%s", got)
+	}
+	if !strings.Contains(got, "ended at no_action") {
+		t.Fatalf("footnote:\n%s", got)
+	}
+	if !strings.Contains(errb.String(), "no_action") {
+		t.Errorf("stderr = %s", errb.String())
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawModel bool
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		f, err := os.Open(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		log, err := harness.LoadTranscript(f)
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if log.Header["model"] != "fake-model" {
+			continue
+		}
+		sawModel = true
+		if log.Header["seed"] != float64(99) {
+			t.Errorf("sampling seed clobbered: %v (want 99)", log.Header["seed"])
+		}
+		if log.Header["engine_seed"] != float64(1) {
+			t.Errorf("engine_seed = %v, want 1", log.Header["engine_seed"])
+		}
+	}
+	if !sawModel {
+		t.Fatal("no model transcript written")
 	}
 }
