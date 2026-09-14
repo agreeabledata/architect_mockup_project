@@ -154,6 +154,8 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	start := time.Now()
 	msgs := []Message{{Role: RoleSystem, Content: BuildSystem()}}
 	var report Report
+	startRemaining := g.Observe().LifespanDays
+	turn := 0
 	for {
 		if report.Iterations >= a.Config.IterationCap {
 			report.Reason = "iteration_cap"
@@ -193,7 +195,13 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 		}
 		for _, tc := range res.ToolCalls {
 			report.ToolCalls++
-			outcome, err := g.Apply(tc.Name, stripReasoning(tc.Arguments))
+			before := g.Observe()
+			stripped := stripReasoning(tc.Arguments)
+			outcome, err := g.Apply(tc.Name, stripped)
+			turn++
+			if a.Transcript != nil {
+				a.Transcript.RecordTurn(newTurnRecord(turn, startRemaining, before, tc.Name, stripped, outcome, err))
+			}
 			if err != nil {
 				outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
 			}
@@ -202,4 +210,26 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	}
 	report.WallTime = time.Since(start)
 	return report, nil
+}
+
+// newTurnRecord builds a structured turn from Observe/Outcome integers, not
+// narrative text. A rejected Apply uses the pre-action state and sets error.
+func newTurnRecord(turn, startRemaining int, before engine.State, action string, args json.RawMessage, outcome engine.Outcome, err error) TurnRecord {
+	rec := TurnRecord{
+		Turn:    turn,
+		Day:     startRemaining - before.LifespanDays,
+		Balance: before.Balance,
+		Action:  action,
+		Args:    parseTurnArgs(args),
+	}
+	if err != nil {
+		msg := err.Error()
+		rec.Error = &msg
+		return rec
+	}
+	rec.Day = startRemaining - outcome.LifespanDays
+	rec.Balance = outcome.Balance
+	rec.Earned = outcome.Earned
+	rec.DaysSpent = before.LifespanDays - outcome.LifespanDays
+	return rec
 }

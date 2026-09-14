@@ -10,6 +10,26 @@ import (
 	"time"
 )
 
+const (
+	kindHeader = "header"
+	kindCall   = "call"
+	kindTurn   = "turn"
+)
+
+// TurnRecord is one applied action (including rejects), sourced from Observe
+// and Outcome integers — never from narrative text.
+type TurnRecord struct {
+	Kind      string         `json:"kind"`
+	Turn      int            `json:"turn"`
+	Day       int            `json:"day"`
+	Balance   int            `json:"balance"`
+	Action    string         `json:"action"`
+	Args      map[string]any `json:"args"`
+	Earned    int            `json:"earned"`
+	DaysSpent int            `json:"days_spent"`
+	Error     *string        `json:"error"`
+}
+
 // Transcript writes one JSONL file per run for audit, with a header hashing the
 // eval config so every result is attributable to (model x prompt-version x seed).
 type Transcript struct {
@@ -29,6 +49,7 @@ func NewTranscript(dir string, cfg *Config) (*Transcript, error) {
 	}
 	t := &Transcript{w: bufio.NewWriter(f), f: f}
 	header := map[string]any{
+		"kind":           kindHeader,
 		"provider":       cfg.Provider,
 		"model":          cfg.Model,
 		"prompt_version": promptVersion,
@@ -52,6 +73,7 @@ func (t *Transcript) write(v any) error {
 // Record appends one model call and its result to the transcript.
 func (t *Transcript) Record(messages []Message, res Result) {
 	_ = t.write(map[string]any{
+		"kind":     kindCall,
 		"messages": messages,
 		"result": map[string]any{
 			"content":     res.Content,
@@ -60,6 +82,28 @@ func (t *Transcript) Record(messages []Message, res Result) {
 			"usage":       res.Usage,
 		},
 	})
+}
+
+// RecordTurn appends one applied action. Readers filter kind=="turn".
+func (t *Transcript) RecordTurn(rec TurnRecord) {
+	rec.Kind = kindTurn
+	if rec.Args == nil {
+		rec.Args = map[string]any{}
+	}
+	_ = t.write(rec)
+}
+
+// parseTurnArgs decodes stripped engine args into a JSON object. Empty or
+// invalid input becomes {}.
+func parseTurnArgs(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
+		return map[string]any{}
+	}
+	return m
 }
 
 // Path returns the transcript file's path.

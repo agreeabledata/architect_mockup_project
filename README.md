@@ -71,6 +71,10 @@ go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
 it from the example's 10 before expecting a terminal run.
 
+Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
+Replay and comparison tools should filter `kind=="turn"` for day, balance,
+action, and payout — those numbers come from the engine `Outcome`, not the prose.
+
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
 `"provider": "openrouter"` and `"api_key_env": "OPENROUTER_API_KEY"`, leave
