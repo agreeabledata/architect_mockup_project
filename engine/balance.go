@@ -44,6 +44,15 @@ const (
 	AttackBudget = 10
 )
 
+// Stub-dev only, not part of the v1 economy: the stub, a harness test double,
+// reads its numbers from here instead of hardcoding.
+const (
+	// DuelLossPenalty is the krones a lost duel costs in the stub's dev world.
+	// The engine does not use it -- a v1 loss pays PayBattleLoss (0), the
+	// wasted days are the penalty (#9).
+	DuelLossPenalty = 10
+)
+
 // AttackPower is the agent's damage per round: its raw krone balance, never
 // spent (issue #9).
 func AttackPower(balance int) int {
