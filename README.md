@@ -264,3 +264,16 @@ GSM-Symbolic) and eval-methodology guidance from Anthropic and METR:
 - **Hash and log the full eval config** (prompt version, model, decoding
   settings, seed) into each transcript header, so every result is attributable
   to (model × prompt-version × seed).
+
+```
+provider      openrouter (meta-llama/llama-3.3-70b-instruct)
+engine        seed 1
+final balance 330 krones
+iterations    12  (cap 60)
+tool calls    11
+tokens        22682 in / 975 out / 23657 total
+wall time     1m15.050710863s
+cost          $0.0033
+reason        no_action
+transcript    transcripts/run_20260914T184721.600107000Z.jsonl
+```
