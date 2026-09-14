@@ -1,7 +1,10 @@
 package harness
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 )
 
@@ -21,46 +24,83 @@ type TranscriptLog struct {
 }
 
 // LoadTranscript decodes a JSONL transcript. Unknown kinds are skipped so
-// older or newer files still yield their turn records.
+// older or newer files still yield their turn records. On a truncated or
+// malformed line it returns the records parsed so far plus an error that
+// includes the 1-based line number. Reasonings are paired structurally: each
+// turn pops one from the most recent preceding call's queue.
 func LoadTranscript(r io.Reader) (*TranscriptLog, error) {
 	log := &TranscriptLog{Header: map[string]any{}}
-	dec := json.NewDecoder(r)
+	br := bufio.NewReader(r)
+	var pending []string
+	lineNo := 0
 	for {
-		var raw json.RawMessage
-		if err := dec.Decode(&raw); err != nil {
-			if err == io.EOF {
-				return log, nil
+		line, err := br.ReadBytes('\n')
+		if len(line) > 0 {
+			lineNo++
+			line = bytes.TrimSuffix(line, []byte("\n"))
+			line = bytes.TrimSuffix(line, []byte("\r"))
+			if len(bytes.TrimSpace(line)) == 0 {
+				if err == io.EOF {
+					return log, nil
+				}
+				if err != nil {
+					return log, fmt.Errorf("transcript: line %d: %w", lineNo, err)
+				}
+				continue
 			}
-			return nil, err
+			if perr := parseTranscriptLine(log, line, &pending); perr != nil {
+				return log, fmt.Errorf("transcript: line %d: %w", lineNo, perr)
+			}
 		}
-		var meta struct {
-			Kind string `json:"kind"`
+		if err == io.EOF {
+			return log, nil
 		}
-		if err := json.Unmarshal(raw, &meta); err != nil {
-			return nil, err
-		}
-		switch meta.Kind {
-		case kindHeader:
-			if err := json.Unmarshal(raw, &log.Header); err != nil {
-				return nil, err
+		if err != nil {
+			if lineNo == 0 {
+				return log, err
 			}
-		case kindCall:
-			call, err := parseCallLog(raw)
-			if err != nil {
-				return nil, err
-			}
-			log.Calls = append(log.Calls, call)
-		case kindTurn:
-			var rec TurnRecord
-			if err := json.Unmarshal(raw, &rec); err != nil {
-				return nil, err
-			}
-			if rec.Args == nil {
-				rec.Args = map[string]any{}
-			}
-			log.Turns = append(log.Turns, rec)
+			return log, fmt.Errorf("transcript: line %d: %w", lineNo, err)
 		}
 	}
+}
+
+func parseTranscriptLine(log *TranscriptLog, raw []byte, pending *[]string) error {
+	var meta struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return err
+	}
+	if meta.Kind == "" {
+		return fmt.Errorf("missing kind (pre-#29 transcripts are not replayable)")
+	}
+	switch meta.Kind {
+	case kindHeader:
+		if err := json.Unmarshal(raw, &log.Header); err != nil {
+			return err
+		}
+	case kindCall:
+		call, err := parseCallLog(raw)
+		if err != nil {
+			return err
+		}
+		log.Calls = append(log.Calls, call)
+		*pending = append([]string(nil), call.Reasonings...)
+	case kindTurn:
+		var rec TurnRecord
+		if err := json.Unmarshal(raw, &rec); err != nil {
+			return err
+		}
+		if rec.Args == nil {
+			rec.Args = map[string]any{}
+		}
+		if len(*pending) > 0 {
+			rec.Reasoning = (*pending)[0]
+			*pending = (*pending)[1:]
+		}
+		log.Turns = append(log.Turns, rec)
+	}
+	return nil
 }
 
 func parseCallLog(raw json.RawMessage) (CallLog, error) {
@@ -141,4 +181,5 @@ type RunStats struct {
 	InputTokens    int64
 	OutputTokens   int64
 	InvalidActions int
+	Reason         string // terminal | iteration_cap | decision_cap | no_action; empty for bot logs
 }

@@ -17,6 +17,9 @@ import (
 	"architect_mockup_project/harness"
 )
 
+// newProvider is harness.NewProvider; tests swap it for a fake.
+var newProvider = harness.NewProvider
+
 func main() {
 	seedsFlag := flag.String("seeds", "1", "comma-separated engine seeds")
 	configsFlag := flag.String("configs", "", "comma-separated config paths; bot is always the first row")
@@ -43,11 +46,12 @@ func runCompare(ctx context.Context, seeds []uint32, configs []string, dir strin
 		if err != nil {
 			return err
 		}
+		st.Reason = "terminal"
 		botStats = append(botStats, st)
-		fmt.Fprintf(stderr, "bot  seed %d  balance %d  %s\n", seed, st.FinalBalance, path)
+		fmt.Fprintf(stderr, "bot  seed %d  balance %d  terminal  %s\n", seed, st.FinalBalance, path)
 	}
 	botRow := aggregate("bot", seeds, botStats, nil, 0)
-	botRow.gap = 0
+	botRow.gap = 0 // this row is the baseline; aggregate got botMean 0
 	rows := []row{botRow}
 
 	for _, cfgPath := range configs {
@@ -58,11 +62,13 @@ func runCompare(ctx context.Context, seeds []uint32, configs []string, dir strin
 		if err != nil {
 			return fmt.Errorf("%s: %w", cfgPath, err)
 		}
+		prov, err := newProvider(cfg)
+		if err != nil {
+			return fmt.Errorf("%s: %w", cfgPath, err)
+		}
 		stats := make([]harness.RunStats, 0, len(seeds))
 		for _, seed := range seeds {
-			s := int64(seed)
-			cfg.Seed = &s
-			_, path, err := harness.RunEpisode(ctx, cfg, engine.New(seed), dir)
+			report, path, err := harness.RunEpisode(ctx, prov, cfg, engine.New(seed), dir, seed)
 			if err != nil {
 				return fmt.Errorf("%s seed %d: %w", cfgPath, seed, err)
 			}
@@ -70,8 +76,9 @@ func runCompare(ctx context.Context, seeds []uint32, configs []string, dir strin
 			if err != nil {
 				return err
 			}
+			st.Reason = report.Reason
 			stats = append(stats, st)
-			fmt.Fprintf(stderr, "%s  seed %d  balance %d  %s\n", cfg.Model, seed, st.FinalBalance, path)
+			fmt.Fprintf(stderr, "%s  seed %d  balance %d  %s  %s\n", cfg.Model, seed, st.FinalBalance, report.Reason, path)
 		}
 		rows = append(rows, aggregate(cfg.Model, seeds, stats, cfg, botRow.meanBal))
 	}
@@ -93,19 +100,23 @@ func statsFromPath(path string) (harness.RunStats, error) {
 }
 
 type row struct {
-	model   string
-	seeds   string
-	meanBal float64
-	gap     float64
-	calls   int
-	inTok   int64
-	outTok  int64
-	invalid int
-	cost    float64
+	model    string
+	seeds    string
+	meanBal  float64
+	gap      float64
+	finished int
+	total    int
+	calls    int
+	inTok    int64
+	outTok   int64
+	invalid  int
+	cost     float64
+	costOK   bool
+	nonterm  string
 }
 
 func aggregate(model string, seeds []uint32, stats []harness.RunStats, cfg *harness.Config, botMean float64) row {
-	r := row{model: model, seeds: formatSeeds(seeds)}
+	r := row{model: model, seeds: formatSeeds(seeds), total: len(stats)}
 	var bal int
 	for _, st := range stats {
 		bal += st.FinalBalance
@@ -113,12 +124,20 @@ func aggregate(model string, seeds []uint32, stats []harness.RunStats, cfg *harn
 		r.inTok += st.InputTokens
 		r.outTok += st.OutputTokens
 		r.invalid += st.InvalidActions
+		if st.Reason == "terminal" {
+			r.finished++
+		} else if r.nonterm == "" && st.Reason != "" {
+			r.nonterm = st.Reason
+		}
 	}
 	if n := len(stats); n > 0 {
 		r.meanBal = float64(bal) / float64(n)
 	}
 	r.gap = r.meanBal - botMean
-	if cfg != nil {
+	if cfg == nil {
+		r.costOK = true // bot: not a model, print $0.0000
+	} else if cfg.Priced(cfg.Model) {
+		r.costOK = true
 		r.cost = cfg.Cost(cfg.Model, r.inTok, r.outTok)
 	}
 	return r
@@ -126,14 +145,28 @@ func aggregate(model string, seeds []uint32, stats []harness.RunStats, cfg *harn
 
 func formatTable(rows []row) string {
 	var b strings.Builder
-	b.WriteString("| model | seeds | mean final balance | gap to bot | model calls | input tok | output tok | invalid actions | est. cost |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| model | seeds | mean final balance | gap to bot | finished | model calls | input tok | output tok | invalid actions | est. cost |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range rows {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d | %d | %d | %d | $%.4f |\n",
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %d/%d | %d | %d | %d | %d | %s |\n",
 			r.model, r.seeds, formatNum(r.meanBal), formatGap(r.gap),
-			r.calls, r.inTok, r.outTok, r.invalid, r.cost)
+			r.finished, r.total, r.calls, r.inTok, r.outTok, r.invalid, formatCost(r))
+	}
+	for _, r := range rows {
+		if r.model == "bot" || r.finished >= r.total || r.nonterm == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "%d of %d %s runs ended at %s, not terminal; mean final balance is not comparable to the bot.\n",
+			r.total-r.finished, r.total, r.model, r.nonterm)
 	}
 	return b.String()
+}
+
+func formatCost(r row) string {
+	if !r.costOK {
+		return "n/a"
+	}
+	return fmt.Sprintf("$%.4f", r.cost)
 }
 
 func formatNum(f float64) string {

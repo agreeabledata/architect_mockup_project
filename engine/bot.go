@@ -61,6 +61,7 @@ func (w *World) StepBot() (Outcome, error) {
 }
 
 // DriveBot runs StepBot until the ledger closes or no legal action remains.
+// harness.RunBot is the recording counterpart (same loop, plus transcripts).
 func DriveBot(w *World) {
 	for i := 0; i < BotStepCap; i++ {
 		if w.Observe().Done || len(w.LegalActions()) == 0 {

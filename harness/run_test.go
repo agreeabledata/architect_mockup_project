@@ -22,6 +22,18 @@ func TestRunBotEpisodeSeed1(t *testing.T) {
 	if log.Header["model"] != "bot" || log.Header["provider"] != "bot" {
 		t.Errorf("header = %v", log.Header)
 	}
+	if log.Header["engine_seed"] != float64(1) {
+		t.Errorf("engine_seed = %v, want 1", log.Header["engine_seed"])
+	}
+	if _, ok := log.Header["prompt_version"]; ok {
+		t.Errorf("bot header should omit prompt_version: %v", log.Header)
+	}
+	if _, ok := log.Header["iteration_cap"]; ok {
+		t.Errorf("bot header should omit iteration_cap: %v", log.Header)
+	}
+	if _, ok := log.Header["config_hash"]; ok {
+		t.Errorf("bot header should omit config_hash: %v", log.Header)
+	}
 	if len(log.Calls) != 0 {
 		t.Errorf("bot recorded %d model calls, want 0", len(log.Calls))
 	}

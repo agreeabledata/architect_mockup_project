@@ -23,11 +23,11 @@ func main() {
 	defer f.Close()
 
 	lines, err := harness.Replay(f)
-	if err != nil {
-		fail("replay: %v", err)
-	}
 	for _, line := range lines {
 		fmt.Println(line)
+	}
+	if err != nil {
+		fail("replay: %v", err)
 	}
 }
 

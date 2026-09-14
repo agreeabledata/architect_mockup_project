@@ -6,46 +6,37 @@ import (
 	"strings"
 )
 
-const replayActionWidth = 18
+const replayActionWidth = 24
 
 // Replay prints one terminal line per structured turn, in file order.
+// On a truncated file it still returns the lines parsed so far plus the error.
 func Replay(r io.Reader) ([]string, error) {
 	log, err := LoadTranscript(r)
-	if err != nil {
+	if log == nil {
 		return nil, err
 	}
-	reasonings := flattenReasonings(log.Calls)
 	lines := make([]string, len(log.Turns))
 	for i, rec := range log.Turns {
-		reason := ""
-		if i < len(reasonings) {
-			reason = reasonings[i]
-		}
-		lines[i] = FormatTurn(rec, reason)
+		lines[i] = FormatTurn(rec, rec.Reasoning)
 	}
-	return lines, nil
+	return lines, err
 }
 
-func flattenReasonings(calls []CallLog) []string {
-	var out []string
-	for _, c := range calls {
-		out = append(out, c.Reasonings...)
-	}
-	return out
-}
-
-// FormatTurn renders one kind=="turn" record as a replay line.
+// FormatTurn renders one kind=="turn" record as a replay line. Success lines
+// show pre→post day and balance (post-action is what TurnRecord stores).
 func FormatTurn(rec TurnRecord, reasoning string) string {
 	action := rec.Action
 	if id := questIDArg(rec.Args); id != "" {
 		action += " " + id
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "day %d  bal %d  %-*s", rec.Day, rec.Balance, replayActionWidth, action)
 	if rec.Error != nil {
-		fmt.Fprintf(&b, "  invalid: %s", *rec.Error)
+		fmt.Fprintf(&b, "day %d  bal %d  %-*s  invalid: %s", rec.Day, rec.Balance, replayActionWidth, action, *rec.Error)
 	} else {
-		fmt.Fprintf(&b, "  %+d  %s", rec.Earned, daysPhrase(rec.DaysSpent))
+		beforeDay := rec.Day - rec.DaysSpent
+		beforeBal := rec.Balance - rec.Earned
+		fmt.Fprintf(&b, "day %d→%d  bal %d→%d  %-*s  %+d  %s",
+			beforeDay, rec.Day, beforeBal, rec.Balance, replayActionWidth, action, rec.Earned, daysPhrase(rec.DaysSpent))
 	}
 	if reasoning != "" {
 		fmt.Fprintf(&b, "   reasoning: %q", reasoning)
