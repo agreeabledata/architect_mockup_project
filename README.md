@@ -76,6 +76,10 @@ transcript). The windowed context changed the model inputs, so `prompt_version`
 is now `v3` and `config_hash` inputs changed with it: transcripts from before
 that bump are **not comparable** to runs of the same model and seed after it.
 
+Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
+Replay and comparison tools should filter `kind=="turn"` for day, balance,
+action, and payout — those numbers come from the engine `Outcome`, not the prose.
+
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
 `"provider": "openrouter"` and `"api_key": "<your OpenRouter key>"`, leave
