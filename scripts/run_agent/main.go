@@ -29,18 +29,11 @@ func main() {
 	if err != nil {
 		fail("config: %v", err)
 	}
-	prov, err := newProvider(cfg)
+	prov, err := harness.NewProvider(cfg)
 	if err != nil {
-		fail("%v", err)
+		fail("run: %v", err)
 	}
-	tr, err := harness.NewTranscript("transcripts", cfg)
-	if err != nil {
-		fail("transcript: %v", err)
-	}
-	defer tr.Close()
-
-	agent := &harness.Agent{Provider: prov, Config: cfg, Transcript: tr}
-	report, err := agent.Run(context.Background(), game)
+	report, path, err := harness.RunEpisode(context.Background(), prov, cfg, game, "transcripts", uint32(*seed))
 	if err != nil {
 		fail("run: %v", err)
 	}
@@ -58,17 +51,7 @@ func main() {
 	fmt.Printf("wall time     %s\n", report.WallTime)
 	fmt.Printf("cost          $%.4f\n", report.Cost(cfg))
 	fmt.Printf("reason        %s\n", report.Reason)
-	fmt.Printf("transcript    %s\n", tr.Path())
-}
-
-func newProvider(cfg *harness.Config) (harness.Provider, error) {
-	switch cfg.Provider {
-	case "openai", "deepseek", "openrouter", "ollama":
-		return harness.NewOpenAICompatProvider(cfg.ResolveBaseURL(), cfg.APIKey)
-	case "anthropic":
-		return harness.NewAnthropicProvider(cfg.APIKey, ""), nil
-	}
-	return nil, fmt.Errorf("unknown provider %q (want openai|deepseek|openrouter|ollama|anthropic)", cfg.Provider)
+	fmt.Printf("transcript    %s\n", path)
 }
 
 func fail(format string, args ...any) {

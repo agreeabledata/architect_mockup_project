@@ -1,6 +1,9 @@
 package engine
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestBotFundsThenFights(t *testing.T) {
 	w := New(1)
@@ -73,5 +76,27 @@ func TestBotSkipsUnwinnableBattles(t *testing.T) {
 	}
 	if w.activeID != "d" {
 		t.Fatalf("active = %q, want delivery; outcome %q", w.activeID, out.Narrative)
+	}
+}
+
+func TestBotChoiceNamesTheDelivery(t *testing.T) {
+	w := New(1)
+	w.board = []Quest{
+		{ID: "b", Kind: QuestBattle, Title: "trap", Days: CostBattle, Payout: PayBattleWin, Status: QuestOpen},
+		{ID: "d", Kind: QuestDelivery, Title: "safe", Days: 2, Payout: PayDeliveryShort, Status: QuestOpen},
+	}
+	name, args, err := w.BotChoice()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != ActionAccept {
+		t.Fatalf("name = %q, want %s", name, ActionAccept)
+	}
+	var m map[string]string
+	if err := json.Unmarshal(args, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["quest_id"] != "d" {
+		t.Fatalf("quest_id = %q, want d", m["quest_id"])
 	}
 }

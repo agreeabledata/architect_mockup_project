@@ -180,6 +180,7 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	msgs := []Message{{Role: RoleSystem, Content: BuildSystem()}}
 	retryCap := a.Config.DecisionRetryCapOrDefault()
 	var report Report
+	startRemaining := g.Observe().LifespanDays
 decisions:
 	for {
 		if report.Iterations >= a.Config.IterationCap {
@@ -218,7 +219,9 @@ decisions:
 			report.Iterations++
 			report.Usage = addUsage(report.Usage, res.Usage)
 			if a.Transcript != nil {
-				a.Transcript.Record(msgs, res)
+				if err := a.Transcript.Record(msgs, res); err != nil {
+					return report, fmt.Errorf("transcript: %w", err)
+				}
 			}
 
 			assistant := Message{Role: RoleAssistant, Content: res.Content, ToolCalls: res.ToolCalls}
@@ -229,7 +232,14 @@ decisions:
 			}
 			for _, tc := range res.ToolCalls {
 				report.ToolCalls++
-				outcome, err := g.Apply(tc.Name, stripReasoning(tc.Arguments))
+				before := g.Observe()
+				stripped := stripReasoning(tc.Arguments)
+				outcome, err := g.Apply(tc.Name, stripped)
+				if a.Transcript != nil {
+					if recErr := a.Transcript.RecordTurn(newTurnRecord(report.ToolCalls, startRemaining, before, tc.Name, stripped, outcome, err)); recErr != nil {
+						return report, fmt.Errorf("transcript: %w", recErr)
+					}
+				}
 				if err != nil {
 					outcome = engine.Outcome{Narrative: fmt.Sprintf("Invalid action: %v", err)}
 				} else {
@@ -250,4 +260,26 @@ decisions:
 	report.FinalState, report.Balance = s, s.Balance
 	report.WallTime = time.Since(start)
 	return report, nil
+}
+
+// newTurnRecord builds a structured turn from Observe/Outcome integers, not
+// narrative text. A rejected Apply uses the pre-action state and sets error.
+func newTurnRecord(turn, startRemaining int, before engine.State, action string, args json.RawMessage, outcome engine.Outcome, err error) TurnRecord {
+	rec := TurnRecord{
+		Turn:   turn,
+		Action: action,
+		Args:   parseTurnArgs(args),
+	}
+	if err != nil {
+		msg := err.Error()
+		rec.Error = &msg
+		rec.Day = startRemaining - before.LifespanDays
+		rec.Balance = before.Balance
+		return rec
+	}
+	rec.Day = startRemaining - outcome.LifespanDays
+	rec.Balance = outcome.Balance
+	rec.Earned = outcome.Earned
+	rec.DaysSpent = before.LifespanDays - outcome.LifespanDays
+	return rec
 }

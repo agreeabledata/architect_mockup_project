@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"testing"
 
@@ -147,7 +146,7 @@ func TestAgentStripsReasoningBeforeApply(t *testing.T) {
 		{Content: "Done.", StopReason: StopReasonStop},
 	}}
 	dir := t.TempDir()
-	tr, err := NewTranscript(dir, testConfig(10))
+	tr, err := NewTranscript(dir, testConfig(10), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,16 +183,30 @@ func TestAgentStripsReasoningBeforeApply(t *testing.T) {
 		t.Error("conversation history lost the original reasoning arguments")
 	}
 
-	body, err := os.ReadFile(tr.Path())
-	if err != nil {
-		t.Fatal(err)
+	var callKept, turnStripped bool
+	for _, line := range readJSONL(t, tr.Path()) {
+		switch line["kind"] {
+		case kindCall:
+			raw, _ := json.Marshal(line)
+			if bytes.Contains(raw, []byte(`"reasoning":"short is 30/day"`)) {
+				callKept = true
+			}
+		case kindTurn:
+			args, _ := line["args"].(map[string]any)
+			if args["quest_id"] != "q-d" {
+				t.Errorf("turn args = %v, want quest_id q-d", args)
+			}
+			if _, ok := args[reasoningParam]; ok {
+				t.Errorf("turn args still contain reasoning: %v", args)
+			}
+			turnStripped = true
+		}
 	}
-	lines := bytes.Split(bytes.TrimSpace(body), []byte("\n"))
-	if len(lines) < 2 {
-		t.Fatalf("transcript lines = %d, want header plus at least one record", len(lines))
+	if !callKept {
+		t.Error("call line did not keep reasoning")
 	}
-	if !bytes.Contains(lines[1], []byte(`"reasoning":"short is 30/day"`)) {
-		t.Errorf("transcript did not keep reasoning: %s", lines[1])
+	if !turnStripped {
+		t.Error("missing turn line with stripped args")
 	}
 }
 
@@ -389,9 +402,16 @@ func TestAgentMalformedAction(t *testing.T) {
 		{Content: "Resting.", ToolCalls: []ToolCall{{ID: "r", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
 		{Content: "Done.", StopReason: StopReasonStop},
 	}}
-	agent := &Agent{Provider: prov, Config: testConfig(10)}
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
 	report, err := agent.Run(context.Background(), stub.New())
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if report.Iterations != 3 {
@@ -406,6 +426,97 @@ func TestAgentMalformedAction(t *testing.T) {
 	if !fedBack {
 		t.Error("engine error was not fed back as a tool message")
 	}
+
+	turns := readTurns(t, tr.Path())
+	if len(turns) < 1 {
+		t.Fatal("want at least the rejected fly turn")
+	}
+	fly := turns[0]
+	if fly.Action != "fly" {
+		t.Errorf("action = %q, want fly", fly.Action)
+	}
+	if fly.Error == nil || *fly.Error != `unknown action "fly"` {
+		t.Errorf("error = %v, want unknown action \"fly\"", fly.Error)
+	}
+	if fly.Earned != 0 || fly.DaysSpent != 0 || fly.Balance != 0 || fly.Day != 0 {
+		t.Errorf("rejected turn mutated numbers: %+v", fly)
+	}
+}
+
+func TestAgentTranscriptTurns(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{
+		{
+			ToolCalls:  []ToolCall{{ID: "c1", Name: "take_delivery", Arguments: json.RawMessage("{}")}},
+			StopReason: StopReasonToolCalls,
+		},
+		{
+			ToolCalls:  []ToolCall{{ID: "c2", Name: "deliver_package", Arguments: json.RawMessage("{}")}},
+			StopReason: StopReasonToolCalls,
+		},
+		{StopReason: StopReasonStop},
+	}}
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
+	if _, err := agent.Run(context.Background(), stub.New()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	turns := readTurns(t, tr.Path())
+	if len(turns) != 2 {
+		t.Fatalf("turns = %d, want 2", len(turns))
+	}
+
+	pick := turns[0]
+	if pick.Action != "take_delivery" || pick.Turn != 1 {
+		t.Errorf("first turn = %+v", pick)
+	}
+	if pick.Earned != 0 || pick.DaysSpent != 1 || pick.Balance != 0 || pick.Day != 1 {
+		t.Errorf("pickup numbers = earned %d days %d balance %d day %d", pick.Earned, pick.DaysSpent, pick.Balance, pick.Day)
+	}
+	if pick.Error != nil {
+		t.Errorf("pickup error = %v, want null", pick.Error)
+	}
+	if len(pick.Args) != 0 {
+		t.Errorf("pickup args = %v, want {}", pick.Args)
+	}
+
+	del := turns[1]
+	if del.Action != "deliver_package" || del.Turn != 2 {
+		t.Errorf("second turn = %+v", del)
+	}
+	// stub delivery pays 12 and costs 3 days; assert Outcome ints, not narrative.
+	if del.Earned != 12 || del.DaysSpent != 3 || del.Balance != 12 || del.Day != 4 {
+		t.Errorf("deliver numbers = earned %d days %d balance %d day %d", del.Earned, del.DaysSpent, del.Balance, del.Day)
+	}
+	if del.Error != nil {
+		t.Errorf("deliver error = %v, want null", del.Error)
+	}
+}
+
+func readTurns(t *testing.T, path string) []TurnRecord {
+	t.Helper()
+	var turns []TurnRecord
+	for _, line := range readJSONL(t, path) {
+		if line["kind"] != kindTurn {
+			continue
+		}
+		raw, err := json.Marshal(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rec TurnRecord
+		if err := json.Unmarshal(raw, &rec); err != nil {
+			t.Fatal(err)
+		}
+		turns = append(turns, rec)
+	}
+	return turns
 }
 
 // TestAgentDecisionRetryCap: a model that only emits invalid actions on one
@@ -519,5 +630,171 @@ func TestAgentWindowedContext(t *testing.T) {
 		if m.Role == RoleUser && m.Content == firstTurn {
 			t.Error("oldest turn still reaches the model")
 		}
+	}
+}
+
+func TestAgentRejectedTurnUsesPreActionState(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{
+		{ToolCalls: []ToolCall{{ID: "t", Name: "take_delivery", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{ToolCalls: []ToolCall{{ID: "f", Name: "fly", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{ToolCalls: []ToolCall{{ID: "r", Name: "rest", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{StopReason: StopReasonStop},
+	}}
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
+	if _, err := agent.Run(context.Background(), stub.New()); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+	turns := readTurns(t, tr.Path())
+	var fly *TurnRecord
+	for i := range turns {
+		if turns[i].Action == "fly" {
+			fly = &turns[i]
+			break
+		}
+	}
+	if fly == nil {
+		t.Fatal("missing fly turn")
+	}
+	if fly.Error == nil {
+		t.Fatal("fly should be rejected")
+	}
+	if fly.Day != 1 || fly.Balance != 0 {
+		t.Errorf("rejected fly at day %d bal %d, want post-pickup pre-action day 1 bal 0", fly.Day, fly.Balance)
+	}
+}
+
+func TestTranscriptEngineAcceptDeliver(t *testing.T) {
+	name, args, err := engine.New(1).BotChoice()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != engine.ActionAccept {
+		t.Fatalf("seed 1 first choice = %s, want %s", name, engine.ActionAccept)
+	}
+
+	oracle := engine.New(1)
+	acceptOut, err := oracle.Apply(name, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeDeliver := oracle.Observe()
+	deliverOut, err := oracle.Apply(engine.ActionDeliver, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(args, &m); err != nil {
+		t.Fatal(err)
+	}
+	m[reasoningParam] = "greedy short"
+	withReason, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prov := &scriptedProvider{plan: []Result{
+		{ToolCalls: []ToolCall{{ID: "a", Name: engine.ActionAccept, Arguments: withReason}}, StopReason: StopReasonToolCalls},
+		{ToolCalls: []ToolCall{{ID: "d", Name: engine.ActionDeliver, Arguments: json.RawMessage(`{"reasoning":"complete"}`)}}, StopReason: StopReasonToolCalls},
+		{StopReason: StopReasonStop},
+	}}
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
+	if _, err := agent.Run(context.Background(), engine.New(1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+	turns := readTurns(t, tr.Path())
+	if len(turns) < 2 {
+		t.Fatalf("turns = %d, want at least 2", len(turns))
+	}
+	acc, del := turns[0], turns[1]
+	if acc.Action != engine.ActionAccept {
+		t.Errorf("turn 1 action = %s", acc.Action)
+	}
+	if acc.Earned != acceptOut.Earned || acc.Balance != acceptOut.Balance || acc.Day != engine.StartingLifespanDays-acceptOut.LifespanDays {
+		t.Errorf("accept record = %+v, outcome = %+v", acc, acceptOut)
+	}
+	if del.Action != engine.ActionDeliver {
+		t.Errorf("turn 2 action = %s", del.Action)
+	}
+	if del.Earned != deliverOut.Earned {
+		t.Errorf("earned = %d, want %d (quest payout)", del.Earned, deliverOut.Earned)
+	}
+	if del.DaysSpent != beforeDeliver.LifespanDays-deliverOut.LifespanDays {
+		t.Errorf("days_spent = %d, want %d", del.DaysSpent, beforeDeliver.LifespanDays-deliverOut.LifespanDays)
+	}
+	if del.Day != engine.StartingLifespanDays-deliverOut.LifespanDays {
+		t.Errorf("day = %d, want %d", del.Day, engine.StartingLifespanDays-deliverOut.LifespanDays)
+	}
+	if del.Balance != deliverOut.Balance {
+		t.Errorf("balance = %d, want %d", del.Balance, deliverOut.Balance)
+	}
+}
+
+type twoCallGame struct {
+	applies int
+}
+
+func (g *twoCallGame) Observe() engine.State {
+	if g.applies >= 1 {
+		return engine.State{Narrative: "over", Done: true, LifespanDays: 0}
+	}
+	return engine.State{Narrative: "go", LifespanDays: 50}
+}
+
+func (g *twoCallGame) LegalActions() []engine.Action {
+	return []engine.Action{{Name: "refresh_board"}}
+}
+
+func (g *twoCallGame) Apply(name string, args json.RawMessage) (engine.Outcome, error) {
+	g.applies++
+	if g.applies == 1 {
+		return engine.Outcome{Narrative: "ok", Done: true, LifespanDays: 0}, nil
+	}
+	return engine.Outcome{}, fmt.Errorf("run is over")
+}
+
+func TestAgentAppliesEveryToolCallInResponse(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{{
+		ToolCalls: []ToolCall{
+			{ID: "1", Name: "refresh_board", Arguments: json.RawMessage(`{}`)},
+			{ID: "2", Name: "refresh_board", Arguments: json.RawMessage(`{}`)},
+		},
+		StopReason: StopReasonToolCalls,
+	}}}
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &twoCallGame{}
+	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
+	if _, err := agent.Run(context.Background(), g); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if g.applies != 2 {
+		t.Errorf("Apply called %d times, want 2", g.applies)
+	}
+	turns := readTurns(t, tr.Path())
+	if len(turns) != 2 {
+		t.Fatalf("turns = %d, want 2", len(turns))
+	}
+	if turns[1].Error == nil || *turns[1].Error != "run is over" {
+		t.Errorf("second turn error = %v, want run is over", turns[1].Error)
 	}
 }
