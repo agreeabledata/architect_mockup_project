@@ -452,6 +452,66 @@ func plantArcane(w *World, id string, nodes [ArcaneNodes]Resonance) {
 	w.activeID = ""
 }
 
+func TestApplyAfterDoneNoMutation(t *testing.T) {
+	w := New(1)
+	w.ledger.Days = 0
+	before := w.clone()
+	if _, err := w.Apply(ActionAccept, questArgs("q-d")); err == nil {
+		t.Fatal("accept after done should error")
+	}
+	if _, err := w.Apply(ActionRefresh, nil); err == nil {
+		t.Fatal("refresh after done should error")
+	}
+	if !reflect.DeepEqual(w, before) {
+		t.Fatal("apply after done mutated world")
+	}
+	if acts := w.LegalActions(); acts != nil {
+		t.Fatalf("legal actions after done = %v, want nil", acts)
+	}
+}
+
+func TestAcceptUnaffordableRejected(t *testing.T) {
+	for _, days := range []int{MinDeliveryDays, 3, MaxDeliveryDays} {
+		w := New(1)
+		w.ledger.Days = days - 1
+		plantDelivery(w, "q-d", days, payoutForDeliveryDays(days))
+		before := w.clone()
+		if _, err := w.Apply(ActionAccept, questArgs("q-d")); err == nil {
+			t.Fatalf("%d-day quest with %d days left: want error", days, days-1)
+		}
+		if !reflect.DeepEqual(w, before) {
+			t.Fatalf("%d-day quest mutated world", days)
+		}
+	}
+}
+
+func TestRunEndsExactlyAtZero(t *testing.T) {
+	for _, days := range []int{MinDeliveryDays, 3, MaxDeliveryDays} {
+		w := New(1)
+		w.ledger.Days = days
+		plantDelivery(w, "q-d", days, payoutForDeliveryDays(days))
+		if _, err := w.Apply(ActionAccept, questArgs("q-d")); err != nil {
+			t.Fatal(err)
+		}
+		out, err := w.Apply(ActionDeliver, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !out.Done {
+			t.Fatalf("%d-day run: not done at 0 days", days)
+		}
+		if out.LifespanDays != 0 {
+			t.Fatalf("%d-day run: days = %d, want 0", days, out.LifespanDays)
+		}
+		if out.Balance != payoutForDeliveryDays(days) {
+			t.Fatalf("%d-day run: balance = %d", days, out.Balance)
+		}
+		if _, err := w.Apply(ActionDeliver, nil); err == nil {
+			t.Fatal("apply after exact-zero ending should error")
+		}
+	}
+}
+
 func plantDelivery(w *World, id string, days, pay int) {
 	w.board = []Quest{{
 		ID: id, Kind: QuestDelivery, Title: "test parcel",

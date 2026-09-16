@@ -1,6 +1,43 @@
 package engine
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func TestBoardSeedMixesSeeds(t *testing.T) {
+	collisions := []struct {
+		seedA    uint32
+		refreshA int
+		seedB    uint32
+		refreshB int
+	}{
+		{1, 1, 2, 0},
+		{2, 1, 3, 0},
+		{1, 2, 3, 0},
+		{5, 3, 8, 0},
+	}
+	for _, c := range collisions {
+		a := boardSeed(c.seedA, c.refreshA)
+		b := boardSeed(c.seedB, c.refreshB)
+		if a == b {
+			t.Fatalf("seed %d/refresh %d collides with seed %d/refresh %d (both %d)",
+				c.seedA, c.refreshA, c.seedB, c.refreshB, a)
+		}
+	}
+
+	seen := map[uint32]string{}
+	for seed := uint32(1); seed <= 80; seed++ {
+		for refresh := 0; refresh < 4; refresh++ {
+			s := boardSeed(seed, refresh)
+			key := fmt.Sprintf("seed %d/refresh %d", seed, refresh)
+			if prev, ok := seen[s]; ok {
+				t.Fatalf("%s collides with %s at %d", key, prev, s)
+			}
+			seen[s] = key
+		}
+	}
+}
 
 func TestSeedBoardConstraints(t *testing.T) {
 	for seed := uint32(1); seed <= 80; seed++ {
