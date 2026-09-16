@@ -20,11 +20,11 @@ func (w *World) BotChoice() (string, json.RawMessage, error) {
 		}
 		switch q.Kind {
 		case QuestBattle:
-			return w.Apply(ActionFight, nil)
+			return ActionFight, nil, nil
 		case QuestArcane:
 			return w.stepArcane(q)
 		default:
-			return w.Apply(ActionDeliver, nil)
+			return ActionDeliver, nil, nil
 		}
 	}
 
@@ -67,33 +67,33 @@ func (w *World) StepBot() (Outcome, error) {
 	return w.Apply(name, args)
 }
 
-// stepArcane plays the ritual without peeking at hidden resonances: scry the
+// stepArcane chooses the ritual's next move without applying it: scry the
 // current node unless it is known or deducible to the last remaining
 // resonance, then cast. The mana budget in balance.go makes scry-until-
 // deducible the optimal line.
-func (w *World) stepArcane(q *Quest) (Outcome, error) {
+func (w *World) stepArcane(q *Quest) (string, json.RawMessage, error) {
 	if q.Revealed[q.NextNode] {
-		return w.castResonance(q.Nodes[q.NextNode])
+		return castArgs(q.Nodes[q.NextNode])
 	}
 	if rem := w.remainingResonances(q); len(rem) == 1 {
-		return w.castResonance(rem[0])
+		return castArgs(rem[0])
 	}
 	if q.Mana >= ManaScry {
 		args, err := json.Marshal(map[string]int{"node": q.NextNode + 1})
 		if err != nil {
-			return Outcome{}, err
+			return "", nil, err
 		}
-		return w.Apply(ActionScry, args)
+		return ActionScry, args, nil
 	}
-	return w.castResonance(w.remainingResonances(q)[0])
+	return castArgs(w.remainingResonances(q)[0])
 }
 
-func (w *World) castResonance(r Resonance) (Outcome, error) {
+func castArgs(r Resonance) (string, json.RawMessage, error) {
 	args, err := json.Marshal(map[string]string{"spell": string(r)})
 	if err != nil {
-		return Outcome{}, err
+		return "", nil, err
 	}
-	return w.Apply(ActionCast, args)
+	return ActionCast, args, nil
 }
 
 // remainingResonances returns the resonances not yet disrupted. Only already-
