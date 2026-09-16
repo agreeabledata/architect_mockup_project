@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -61,6 +62,17 @@ func TestBotDeterministicPerSeed(t *testing.T) {
 	DriveBot(b)
 	if a.Observe().Balance != b.Observe().Balance || a.Observe().LifespanDays != b.Observe().LifespanDays {
 		t.Fatalf("same seed diverged: %+v vs %+v", a.Observe(), b.Observe())
+	}
+}
+
+func TestBotDeterministic(t *testing.T) {
+	for _, seed := range []uint32{1, 7, 42} {
+		a, b := New(seed), New(seed)
+		DriveBot(a)
+		DriveBot(b)
+		if !reflect.DeepEqual(a.ledger, b.ledger) {
+			t.Fatalf("seed %d: ledgers differ", seed)
+		}
 	}
 }
 

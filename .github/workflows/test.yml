@@ -15,5 +15,5 @@ jobs:
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
-      - name: bot baseline (seed 1 -> 1640)
-        run: go run ./scripts/run_bot -seed 1 | grep -q 'balance=1640.*done=true'
+      - name: bot baseline (seed 1 -> 1820)
+        run: go run ./scripts/run_bot -seed 1 | grep -q 'balance=1820.*done=true'

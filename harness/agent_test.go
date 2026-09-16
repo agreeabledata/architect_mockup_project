@@ -671,15 +671,16 @@ func TestAgentRejectedTurnUsesPreActionState(t *testing.T) {
 }
 
 func TestTranscriptEngineAcceptDeliver(t *testing.T) {
-	name, args, err := engine.New(1).BotChoice()
+	const seed = 2
+	name, args, err := engine.New(seed).BotChoice()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if name != engine.ActionAccept {
-		t.Fatalf("seed 1 first choice = %s, want %s", name, engine.ActionAccept)
+		t.Fatalf("seed %d first choice = %s, want %s", seed, name, engine.ActionAccept)
 	}
 
-	oracle := engine.New(1)
+	oracle := engine.New(seed)
 	acceptOut, err := oracle.Apply(name, args)
 	if err != nil {
 		t.Fatal(err)
@@ -705,12 +706,12 @@ func TestTranscriptEngineAcceptDeliver(t *testing.T) {
 		{ToolCalls: []ToolCall{{ID: "d", Name: engine.ActionDeliver, Arguments: json.RawMessage(`{"reasoning":"complete"}`)}}, StopReason: StopReasonToolCalls},
 		{StopReason: StopReasonStop},
 	}}
-	tr, err := NewTranscript(t.TempDir(), testConfig(10), 1)
+	tr, err := NewTranscript(t.TempDir(), testConfig(10), seed)
 	if err != nil {
 		t.Fatal(err)
 	}
 	agent := &Agent{Provider: prov, Config: testConfig(10), Transcript: tr}
-	if _, err := agent.Run(context.Background(), engine.New(1)); err != nil {
+	if _, err := agent.Run(context.Background(), engine.New(seed)); err != nil {
 		t.Fatal(err)
 	}
 	if err := tr.Close(); err != nil {

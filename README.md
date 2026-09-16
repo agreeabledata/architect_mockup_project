@@ -53,7 +53,7 @@ two small interfaces, so they proceed in parallel without blocking each other:
    Harness (#11): both clients, agent loop, cost record, stub round trip.
 3. **Integration** — **done 2026-09-02.** First end-to-end 50-day run:
    `llama3.2:3b` on Ollama, seed 1, 1390 krones in 41 model calls (greedy bot:
-   1650). The model fought at 0 and 70 krones and lost both — the trap works.
+   1820). The model fought at 0 and 70 krones and lost both — the trap works.
    **Office hours 2026-09-03:** that run recorded 41 decisions with zero
    rationale. Every tool schema the harness sends now requires a `reasoning`
    string; it is stripped before `Apply` and kept in the transcript.

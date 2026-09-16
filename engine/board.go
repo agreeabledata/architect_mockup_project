@@ -181,5 +181,5 @@ func arcaneBlurb() string {
 }
 
 func boardSeed(seed uint32, refresh int) uint32 {
-	return seed + uint32(refresh)
+	return seed*31 + uint32(refresh)
 }
