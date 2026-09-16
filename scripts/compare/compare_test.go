@@ -97,10 +97,10 @@ func TestCompareBotOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "| bot | 1 | 1650 | +0 | 1/1 | 0 | 0 | 0 | 0 | $0.0000 |") {
+	if !strings.Contains(got, "| bot | 1 | 1640 | +0 | 1/1 | 0 | 0 | 0 | 0 | $0.0000 |") {
 		t.Fatalf("table:\n%s\nstderr:\n%s", got, errb.String())
 	}
-	if !strings.Contains(errb.String(), "bot  seed 1  balance 1650") {
+	if !strings.Contains(errb.String(), "bot  seed 1  balance 1640") {
 		t.Errorf("stderr = %s", errb.String())
 	}
 
@@ -113,7 +113,7 @@ func TestCompareBotOnly(t *testing.T) {
 	if err := runCompare(context.Background(), []uint32{1, 2}, []string{"bot"}, dir, &out, &errb); err != nil {
 		t.Fatal(err)
 	}
-	mean := float64(1650+want2) / 2
+	mean := float64(1640+want2) / 2
 	wantRow := "| bot | 1,2 | " + formatNum(mean) + " | +0 |"
 	if !strings.Contains(out.String(), wantRow) {
 		t.Fatalf("two-seed table:\n%s\nwant substring %s", out.String(), wantRow)

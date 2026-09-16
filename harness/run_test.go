@@ -41,8 +41,8 @@ func TestRunBotEpisodeSeed1(t *testing.T) {
 		t.Fatal("no turns")
 	}
 	st := log.Stats()
-	if st.FinalBalance != 1650 {
-		t.Errorf("final balance = %d, want 1650", st.FinalBalance)
+	if st.FinalBalance != 1640 {
+		t.Errorf("final balance = %d, want 1640", st.FinalBalance)
 	}
 	if st.InvalidActions != 0 {
 		t.Errorf("invalid actions = %d, want 0", st.InvalidActions)

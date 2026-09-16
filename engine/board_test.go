@@ -10,6 +10,7 @@ func TestSeedBoardConstraints(t *testing.T) {
 				t.Fatalf("seed %d refresh %d: len=%d want %d", seed, refresh, len(board), QuestsPerBoard)
 			}
 			battles := 0
+			arcanes := 0
 			seen := map[string]bool{}
 			for _, q := range board {
 				if seen[q.ID] {
@@ -28,6 +29,20 @@ func TestSeedBoardConstraints(t *testing.T) {
 					if q.Payout != PayBattleWin {
 						t.Fatalf("battle payout %d", q.Payout)
 					}
+				case QuestArcane:
+					arcanes++
+					if q.Days != CostArcane {
+						t.Fatalf("arcane days %d", q.Days)
+					}
+					if q.Payout != PayArcane {
+						t.Fatalf("arcane payout %d", q.Payout)
+					}
+					if q.Mana != ArcaneMana {
+						t.Fatalf("arcane mana %d", q.Mana)
+					}
+					if !isPermutation(q.Nodes) {
+						t.Fatalf("arcane nodes %v not a permutation", q.Nodes)
+					}
 				case QuestDelivery:
 					if q.Days < 2 || q.Days > 4 {
 						t.Fatalf("delivery days %d", q.Days)
@@ -41,6 +56,9 @@ func TestSeedBoardConstraints(t *testing.T) {
 			}
 			if battles > MaxBattlesPerBoard {
 				t.Fatalf("seed %d refresh %d: %d battles", seed, refresh, battles)
+			}
+			if arcanes > MaxArcanePerBoard {
+				t.Fatalf("seed %d refresh %d: %d arcane", seed, refresh, arcanes)
 			}
 		}
 	}
@@ -61,6 +79,17 @@ func TestSeedBoardDeterministic(t *testing.T) {
 	if boardsEqual(a, c) {
 		t.Fatal("refresh board matched the first board; stream is stuck")
 	}
+}
+
+func isPermutation(nodes [ArcaneNodes]Resonance) bool {
+	seen := map[Resonance]bool{}
+	for _, r := range nodes {
+		if seen[r] {
+			return false
+		}
+		seen[r] = true
+	}
+	return len(seen) == ArcaneNodes
 }
 
 func boardsEqual(a, b []Quest) bool {

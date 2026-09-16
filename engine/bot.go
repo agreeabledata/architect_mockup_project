@@ -18,10 +18,14 @@ func (w *World) BotChoice() (string, json.RawMessage, error) {
 		if q == nil {
 			return "", nil, fmt.Errorf("bot: active quest missing")
 		}
-		if q.Kind == QuestBattle {
+		switch q.Kind {
+		case QuestBattle:
 			return ActionFight, nil, nil
+		case QuestArcane:
+			return w.stepArcane(q)
+		default:
+			return ActionDeliver, nil, nil
 		}
-		return ActionDeliver, nil, nil
 	}
 
 	bestI := -1
@@ -31,6 +35,9 @@ func (w *World) BotChoice() (string, json.RawMessage, error) {
 			continue
 		}
 		if q.Kind == QuestBattle && !WinsBattle(w.ledger.Krone) {
+			continue
+		}
+		if q.Kind == QuestArcane && !arcaneSolvable(q) {
 			continue
 		}
 		rate := float64(q.Payout) / float64(q.Days)
@@ -58,6 +65,57 @@ func (w *World) StepBot() (Outcome, error) {
 		return Outcome{}, err
 	}
 	return w.Apply(name, args)
+}
+
+// stepArcane chooses the ritual's next move without applying it: scry the
+// current node unless it is known or deducible to the last remaining
+// resonance, then cast. The mana budget in balance.go makes scry-until-
+// deducible the optimal line.
+func (w *World) stepArcane(q *Quest) (string, json.RawMessage, error) {
+	if q.Revealed[q.NextNode] {
+		return castArgs(q.Nodes[q.NextNode])
+	}
+	if rem := w.remainingResonances(q); len(rem) == 1 {
+		return castArgs(rem[0])
+	}
+	if q.Mana >= ManaScry {
+		args, err := json.Marshal(map[string]int{"node": q.NextNode + 1})
+		if err != nil {
+			return "", nil, err
+		}
+		return ActionScry, args, nil
+	}
+	return castArgs(w.remainingResonances(q)[0])
+}
+
+func castArgs(r Resonance) (string, json.RawMessage, error) {
+	args, err := json.Marshal(map[string]string{"spell": string(r)})
+	if err != nil {
+		return "", nil, err
+	}
+	return ActionCast, args, nil
+}
+
+// remainingResonances returns the resonances not yet disrupted. Only already-
+// cast nodes are read, so the bot never peeks at hidden state.
+func (w *World) remainingResonances(q *Quest) []Resonance {
+	used := map[Resonance]bool{}
+	for i := 0; i < q.NextNode; i++ {
+		used[q.Nodes[i]] = true
+	}
+	var rem []Resonance
+	for _, r := range resonances {
+		if !used[r] {
+			rem = append(rem, r)
+		}
+	}
+	return rem
+}
+
+// arcaneSolvable reports whether the ritual's mana covers the worst-case
+// no-peek line: scry all but one node, then cast every spell.
+func arcaneSolvable(q Quest) bool {
+	return q.Mana >= ManaScry*(ArcaneNodes-1)+ManaSpell*ArcaneNodes
 }
 
 // DriveBot runs StepBot until the ledger closes or no legal action remains.
