@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -219,4 +220,195 @@ func TestCompareModelPathNoAction(t *testing.T) {
 	if !sawModel {
 		t.Fatal("no model transcript written")
 	}
+}
+
+func TestBuildFromTableAndAnalysis(t *testing.T) {
+	dir := t.TempDir()
+	writeSeed(t, filepath.Join(dir, "bot", "seed-1.jsonl"), "bot", 1, []string{
+		turnLine(2, 0, "refresh_board", 0, false),
+		turnLine(50, 1000, "deliver", 60, false),
+	})
+	writeSeed(t, filepath.Join(dir, "bot", "seed-2.jsonl"), "bot", 2, []string{
+		turnLine(50, 2000, "deliver", 60, false),
+	})
+	writeSeed(t, filepath.Join(dir, "priced", "seed-1.jsonl"), "m", 1, []string{
+		callLine(1_000_000, 0),
+		turnLine(2, 70, "fight", 0, false),
+		turnLine(4, 70, "fly", 0, true),
+		turnLine(50, 800, "refresh_board", 0, false),
+	})
+	writeSeed(t, filepath.Join(dir, "priced", "seed-2.jsonl"), "m", 2, []string{
+		turnLine(50, 900, "refresh_board", 0, false),
+	})
+	writeSeed(t, filepath.Join(dir, "unpriced", "seed-1.jsonl"), "x", 1, []string{
+		turnLine(50, 1, "deliver", 1, false),
+	})
+	writeSeed(t, filepath.Join(dir, "unpriced", "seed-2.jsonl"), "x", 2, []string{
+		turnLine(50, 1, "deliver", 1, false),
+	})
+	// These would fail the day-50 check if -from scored them.
+	writeSeed(t, filepath.Join(dir, "failed", "m", "seed-9.jsonl"), "m", 9, []string{
+		turnLine(10, 99999, "deliver", 1, false),
+	})
+	writeSeed(t, filepath.Join(dir, "archive", "seed-1.jsonl"), "old", 1, []string{
+		turnLine(3, 99999, "deliver", 1, false),
+	})
+	if err := os.WriteFile(filepath.Join(dir, "failed", "NOTES.md"), []byte("m seed 9: no_action\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pricing := filepath.Join(dir, "pricing.json")
+	if err := os.WriteFile(pricing, []byte(`{"pricing":{"m":{"input_per_million":0,"output_per_million":0}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := buildFrom(dir, pricing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := buildFrom(dir, pricing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != again {
+		t.Fatal("buildFrom is not stable")
+	}
+	for _, want := range []string{
+		"| bot | 1,2 | 1500 | +0 | 2/2 | 0 | 0 | 0 | 0 | $0.0000 |",
+		"| m | 1,2 | 850 | -650 | 2/2 | 1 | 1000000 | 0 | 1 | $0.0000 |",
+		"| x | 1,2 | 1 | -1499 | 2/2 | 0 | 0 | 0 | 0 | n/a |",
+		"m averaged 850 (gap -650). It fought under 150 krones 1 time (seeds 1), refreshed the board 2 times versus the bot's 1 time on the same seeds, and recorded 1 invalid action.",
+		"x averaged 1 (gap -1499). It fought under 150 krones 0 times, refreshed the board 0 times versus the bot's 1 time on the same seeds, and recorded 0 invalid actions.",
+		"Every scored run reached day 50.",
+		"## Failed runs\n\nm seed 9: no_action\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "99999") {
+		t.Fatalf("unscored transcript leaked into the README:\n%s", got)
+	}
+	if strings.Count(got, "\n## Analysis\n") != 1 {
+		t.Fatalf("analysis heading:\n%s", got)
+	}
+}
+
+func TestBuildFromRejectsIncompleteDuplicateAndMismatch(t *testing.T) {
+	pricing := func(dir string) string {
+		t.Helper()
+		path := filepath.Join(dir, "pricing.json")
+		if err := os.WriteFile(path, []byte(`{"pricing":{}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	t.Run("short", func(t *testing.T) {
+		dir := t.TempDir()
+		writeSeed(t, filepath.Join(dir, "bot", "seed-1.jsonl"), "bot", 1, []string{
+			turnLine(16, 330, "refresh_board", 0, false),
+		})
+		_, err := buildFrom(dir, pricing(dir))
+		if err == nil || !strings.Contains(err.Error(), "move it under failed/") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("duplicate", func(t *testing.T) {
+		dir := t.TempDir()
+		body := []string{turnLine(50, 1, "deliver", 1, false)}
+		writeSeed(t, filepath.Join(dir, "bot", "seed-1.jsonl"), "bot", 1, body)
+		writeSeed(t, filepath.Join(dir, "copy", "seed-1.jsonl"), "bot", 1, body)
+		_, err := buildFrom(dir, pricing(dir))
+		if err == nil || !strings.Contains(err.Error(), "duplicate bot seed 1") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("filename", func(t *testing.T) {
+		dir := t.TempDir()
+		writeSeed(t, filepath.Join(dir, "bot", "seed-2.jsonl"), "bot", 1, []string{
+			turnLine(50, 1, "deliver", 1, false),
+		})
+		_, err := buildFrom(dir, pricing(dir))
+		if err == nil || !strings.Contains(err.Error(), "does not match filename seed") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("seed set", func(t *testing.T) {
+		dir := t.TempDir()
+		writeSeed(t, filepath.Join(dir, "bot", "seed-1.jsonl"), "bot", 1, []string{
+			turnLine(50, 1, "deliver", 1, false),
+		})
+		writeSeed(t, filepath.Join(dir, "m", "seed-2.jsonl"), "m", 2, []string{
+			turnLine(50, 1, "deliver", 1, false),
+		})
+		_, err := buildFrom(dir, pricing(dir))
+		if err == nil || !strings.Contains(err.Error(), "do not match bot seeds") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("no bot", func(t *testing.T) {
+		dir := t.TempDir()
+		writeSeed(t, filepath.Join(dir, "m", "seed-1.jsonl"), "m", 1, []string{
+			turnLine(50, 1, "deliver", 1, false),
+		})
+		_, err := buildFrom(dir, pricing(dir))
+		if err == nil || !strings.Contains(err.Error(), "no bot transcripts") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
+func TestWriteFrom(t *testing.T) {
+	dir := t.TempDir()
+	writeSeed(t, filepath.Join(dir, "bot", "seed-1.jsonl"), "bot", 1, []string{
+		turnLine(50, 1820, "deliver", 60, false),
+	})
+	pricing := filepath.Join(dir, "pricing.json")
+	if err := os.WriteFile(pricing, []byte(`{"pricing":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFrom(dir, pricing); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "The bot is the only scored row. Every scored run reached day 50.\n") {
+		t.Fatalf("readme:\n%s", b)
+	}
+}
+
+func writeSeed(t *testing.T, path, model string, seed int, lines []string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "{\"kind\":\"header\",\"provider\":%q,\"model\":%q,\"engine_seed\":%d}\n", model, model, seed)
+	for _, line := range lines {
+		b.WriteString(line)
+		if !strings.HasSuffix(line, "\n") {
+			b.WriteByte('\n')
+		}
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func turnLine(day, balance int, action string, earned int, invalid bool) string {
+	errField := "null"
+	if invalid {
+		errField = `"unknown action"`
+	}
+	return fmt.Sprintf(`{"kind":"turn","turn":1,"day":%d,"balance":%d,"action":%q,"args":{},"earned":%d,"days_spent":1,"error":%s}`, day, balance, action, earned, errField)
+}
+
+func callLine(in, out int) string {
+	return fmt.Sprintf(`{"kind":"call","result":{"tool_calls":[],"usage":{"InputTokens":%d,"OutputTokens":%d,"TotalTokens":%d}}}`, in, out, in+out)
 }
