@@ -67,6 +67,7 @@ cp config.example.json config.json   # pick a provider; local Ollama needs no ke
 go run ./scripts/run_agent -seed 1   # real engine; add -stub for the stub
 go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 go run ./scripts/replay transcripts/run_….jsonl   # one line per turn, from kind=="turn"
+go run ./scripts/replay_visual transcripts/run_….jsonl   # self-contained HTML animation
 go run ./scripts/compare -seeds 1,2,3 -configs bot,config.json
 # optional: -transcripts dir  (default transcripts)
 ```
@@ -91,7 +92,11 @@ A `finished n/m` column counts runs that reached `terminal`; non-terminal
 reasons (`iteration_cap`, `decision_cap`, `no_action`) are printed on stderr
 and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
 (default `transcripts`). The header's `seed` is the model sampling seed;
-`engine_seed` is the world seed.
+`engine_seed` is the world seed. `scripts/replay_visual` reads those same
+records through the same parser and writes one self-contained HTML file
+(`-out` to pick the path, default `<transcript>.html`) that animates the run
+with 2D shapes and text — a lifespan track, a balance meter, the current action
+and its reasoning. The engine stays headless; open the file in a browser.
 
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
