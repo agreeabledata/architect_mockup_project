@@ -14,33 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"architect_mockup_project/engine"
 	"architect_mockup_project/harness"
+	"architect_mockup_project/internal/visual"
 )
-
-// frame is one turn flattened from a harness.TurnRecord for the page.
-type frame struct {
-	Turn      int    `json:"turn"`
-	Day       int    `json:"day"`
-	Balance   int    `json:"balance"`
-	Action    string `json:"action"`
-	QuestID   string `json:"quest_id,omitempty"`
-	Earned    int    `json:"earned"`
-	DaysSpent int    `json:"days_spent"`
-	Error     string `json:"error,omitempty"`
-	Reasoning string `json:"reasoning,omitempty"`
-}
-
-// scene is everything the page needs: header summary plus one frame per turn.
-type scene struct {
-	Model       string  `json:"model"`
-	Provider    string  `json:"provider"`
-	EngineSeed  int     `json:"engine_seed"`
-	FinalBal    int     `json:"final_balance"`
-	TotalEarned int     `json:"total_earned"`
-	MaxDay      int     `json:"max_day"`
-	Frames      []frame `json:"frames"`
-}
 
 func main() {
 	out := flag.String("out", "", "output HTML path (default <transcript>.html)")
@@ -62,7 +38,7 @@ func main() {
 	defer f.Close()
 
 	log, loadErr := harness.LoadTranscript(f)
-	sc := buildScene(log)
+	sc := visual.BuildScene(log)
 
 	dest := *out
 	if dest == "" {
@@ -82,52 +58,7 @@ func main() {
 	fmt.Println(dest)
 }
 
-// buildScene turns a parsed transcript into the page's animation model. It
-// reads only structured records, never the observation prose.
-func buildScene(log *harness.TranscriptLog) scene {
-	sc := scene{
-		Model:    headerString(log.Header, "model"),
-		Provider: headerString(log.Header, "provider"),
-		MaxDay:   engine.StartingLifespanDays,
-	}
-	if seed, ok := log.Header["engine_seed"].(float64); ok {
-		sc.EngineSeed = int(seed)
-	}
-	for _, t := range log.Turns {
-		f := frame{
-			Turn:      t.Turn,
-			Day:       t.Day,
-			Balance:   t.Balance,
-			Action:    t.Action,
-			QuestID:   questID(t.Args),
-			Earned:    t.Earned,
-			DaysSpent: t.DaysSpent,
-			Reasoning: t.Reasoning,
-		}
-		if t.Error != nil {
-			f.Error = *t.Error
-		} else {
-			sc.TotalEarned += t.Earned
-		}
-		sc.Frames = append(sc.Frames, f)
-	}
-	if n := len(log.Turns); n > 0 {
-		sc.FinalBal = log.Turns[n-1].Balance
-	}
-	return sc
-}
-
-func headerString(header map[string]any, key string) string {
-	s, _ := header[key].(string)
-	return s
-}
-
-func questID(args map[string]any) string {
-	s, _ := args["quest_id"].(string)
-	return s
-}
-
-func writeHTML(w io.Writer, sc scene) error {
+func writeHTML(w io.Writer, sc visual.Scene) error {
 	return pageTemplate.Execute(w, sc)
 }
 

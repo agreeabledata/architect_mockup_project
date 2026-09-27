@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"architect_mockup_project/harness"
+	"architect_mockup_project/internal/visual"
 )
 
 const fixture = `
@@ -22,7 +23,7 @@ func TestBuildScene(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := buildScene(log)
+	sc := visual.BuildScene(log)
 	if sc.Model != "test-model" || sc.Provider != "test" {
 		t.Errorf("header = %q/%q", sc.Model, sc.Provider)
 	}
@@ -47,7 +48,7 @@ func TestBuildScene(t *testing.T) {
 }
 
 func TestWriteHTMLEmbedsScene(t *testing.T) {
-	sc := buildScene(mustLog(t, fixture))
+	sc := visual.BuildScene(mustLog(t, fixture))
 	var b strings.Builder
 	if err := writeHTML(&b, sc); err != nil {
 		t.Fatal(err)
@@ -68,7 +69,7 @@ func TestWriteHTMLEmbedsScene(t *testing.T) {
 		t.Fatal("SCENE line not terminated")
 	}
 	raw := strings.TrimRight(rest[:nl], "; \t")
-	var got scene
+	var got visual.Scene
 	if err := json.Unmarshal([]byte(raw), &got); err != nil {
 		t.Fatalf("embedded scene is not valid JSON: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestWriteHTMLEscapesReasoning(t *testing.T) {
 {"kind":"turn","turn":1,"day":1,"balance":1,"action":"deliver","args":{},"earned":1,"days_spent":1,"error":null}
 `)
 	var b strings.Builder
-	if err := writeHTML(&b, buildScene(log)); err != nil {
+	if err := writeHTML(&b, visual.BuildScene(log)); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(b.String(), "</script><script>alert(1)") {
@@ -107,7 +108,7 @@ func TestSceneFromBotTranscript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := buildScene(log)
+	sc := visual.BuildScene(log)
 	if len(sc.Frames) == 0 {
 		t.Fatal("no frames from a real bot run")
 	}
