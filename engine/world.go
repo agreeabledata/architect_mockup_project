@@ -44,6 +44,14 @@ func New(seed uint32) *World {
 	return w
 }
 
+// Board returns a copy of the current quest board, active quest included.
+// Read-only and additive: it is not part of the Game seam, and callers cannot
+// mutate the world through the returned slice. Used by the #23 visualizer to
+// replay what the agent saw each turn.
+func (w *World) Board() []Quest {
+	return append([]Quest(nil), w.board...)
+}
+
 // Observe implements Game.
 func (w *World) Observe() State {
 	return State{

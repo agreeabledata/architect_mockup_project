@@ -567,3 +567,18 @@ func (w *World) clone() *World {
 	c.ledger.Events = append([]LedgerEvent(nil), w.ledger.Events...)
 	return &c
 }
+
+func TestBoardSnapshotIsCopy(t *testing.T) {
+	w := New(1)
+	got := w.Board()
+	if len(got) != QuestsPerBoard {
+		t.Fatalf("board size = %d, want %d", len(got), QuestsPerBoard)
+	}
+	if !boardsEqual(got, w.board) {
+		t.Fatal("Board() does not match the world's board")
+	}
+	got[0].ID = "mutated"
+	if w.board[0].ID == "mutated" {
+		t.Fatal("mutating the returned board changed the world")
+	}
+}
