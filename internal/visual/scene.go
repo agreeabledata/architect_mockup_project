@@ -68,7 +68,7 @@ func BuildScene(log *harness.TranscriptLog) Scene {
 	sc := Scene{
 		Model:    headerString(log.Header, "model"),
 		Provider: headerString(log.Header, "provider"),
-		MaxDay:   engine.StartingLifespanDays,
+		MaxDay:   engine.StartingHealthDays,
 	}
 	seed, hasSeed := log.Header["engine_seed"].(float64)
 	if hasSeed {
@@ -107,7 +107,7 @@ func BuildScene(log *harness.TranscriptLog) Scene {
 // at the first mismatch the boards stop, since every later one would be wrong.
 func replayBoards(sc *Scene, turns []harness.TurnRecord) {
 	w := engine.New(uint32(sc.EngineSeed))
-	startRemaining := w.Observe().LifespanDays // as newTurnRecord measures day
+	startRemaining := w.Observe().HealthDays // as newTurnRecord measures day
 	for i := range sc.Frames {
 		sc.Frames[i].Board = boardView(w)
 		sc.Frames[i].Legal = legalNames(w)
@@ -116,7 +116,7 @@ func replayBoards(sc *Scene, turns []harness.TurnRecord) {
 		args, _ := json.Marshal(t.Args)
 		out, err := w.Apply(t.Action, args)
 		if (err != nil) != (t.Error != nil) ||
-			err == nil && (out.Balance != t.Balance || out.Earned != t.Earned || startRemaining-out.LifespanDays != t.Day) {
+			err == nil && (out.Balance != t.Balance || out.Earned != t.Earned || startRemaining-out.HealthDays != t.Day) {
 			sc.DivergedAt = t.Turn
 			return
 		}

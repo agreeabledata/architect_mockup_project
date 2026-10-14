@@ -732,7 +732,7 @@ func TestTranscriptEngineAcceptDeliver(t *testing.T) {
 	if acc.Action != engine.ActionAccept {
 		t.Errorf("turn 1 action = %s", acc.Action)
 	}
-	if acc.Earned != acceptOut.Earned || acc.Balance != acceptOut.Balance || acc.Day != engine.StartingLifespanDays-acceptOut.LifespanDays {
+	if acc.Earned != acceptOut.Earned || acc.Balance != acceptOut.Balance || acc.Day != engine.StartingHealthDays-acceptOut.HealthDays {
 		t.Errorf("accept record = %+v, outcome = %+v", acc, acceptOut)
 	}
 	if del.Action != engine.ActionDeliver {
@@ -741,11 +741,11 @@ func TestTranscriptEngineAcceptDeliver(t *testing.T) {
 	if del.Earned != deliverOut.Earned {
 		t.Errorf("earned = %d, want %d (quest payout)", del.Earned, deliverOut.Earned)
 	}
-	if del.DaysSpent != beforeDeliver.LifespanDays-deliverOut.LifespanDays {
-		t.Errorf("days_spent = %d, want %d", del.DaysSpent, beforeDeliver.LifespanDays-deliverOut.LifespanDays)
+	if del.DaysSpent != beforeDeliver.HealthDays-deliverOut.HealthDays {
+		t.Errorf("days_spent = %d, want %d", del.DaysSpent, beforeDeliver.HealthDays-deliverOut.HealthDays)
 	}
-	if del.Day != engine.StartingLifespanDays-deliverOut.LifespanDays {
-		t.Errorf("day = %d, want %d", del.Day, engine.StartingLifespanDays-deliverOut.LifespanDays)
+	if del.Day != engine.StartingHealthDays-deliverOut.HealthDays {
+		t.Errorf("day = %d, want %d", del.Day, engine.StartingHealthDays-deliverOut.HealthDays)
 	}
 	if del.Balance != deliverOut.Balance {
 		t.Errorf("balance = %d, want %d", del.Balance, deliverOut.Balance)
@@ -758,9 +758,9 @@ type twoCallGame struct {
 
 func (g *twoCallGame) Observe() engine.State {
 	if g.applies >= 1 {
-		return engine.State{Narrative: "over", Done: true, LifespanDays: 0}
+		return engine.State{Narrative: "over", Done: true, HealthDays: 0}
 	}
-	return engine.State{Narrative: "go", LifespanDays: 50}
+	return engine.State{Narrative: "go", HealthDays: 50}
 }
 
 func (g *twoCallGame) LegalActions() []engine.Action {
@@ -770,7 +770,7 @@ func (g *twoCallGame) LegalActions() []engine.Action {
 func (g *twoCallGame) Apply(name string, args json.RawMessage) (engine.Outcome, error) {
 	g.applies++
 	if g.applies == 1 {
-		return engine.Outcome{Narrative: "ok", Done: true, LifespanDays: 0}, nil
+		return engine.Outcome{Narrative: "ok", Done: true, HealthDays: 0}, nil
 	}
 	return engine.Outcome{}, fmt.Errorf("run is over")
 }

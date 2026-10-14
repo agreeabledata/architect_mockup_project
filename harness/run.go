@@ -34,7 +34,7 @@ func BotConfig() *Config {
 // RunBot drives the greedy baseline, recording one structured turn per action.
 // Same loop as engine.DriveBot; keep them in sync.
 func RunBot(w *engine.World, tr *Transcript) error {
-	startRemaining := w.Observe().LifespanDays
+	startRemaining := w.Observe().HealthDays
 	turn := 0
 	for i := 0; i < engine.BotStepCap; i++ {
 		before := w.Observe()

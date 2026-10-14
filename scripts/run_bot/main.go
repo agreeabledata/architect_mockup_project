@@ -18,7 +18,7 @@ func main() {
 	for n := 0; n < 256; n++ {
 		st := w.Observe()
 		fmt.Printf("======== step %d ========\n%sbalance=%d days=%d done=%v\n",
-			n, st.Narrative, st.Balance, st.LifespanDays, st.Done)
+			n, st.Narrative, st.Balance, st.HealthDays, st.Done)
 		if st.Done {
 			return
 		}

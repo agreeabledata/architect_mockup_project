@@ -24,8 +24,8 @@ func TestStubDelivery(t *testing.T) {
 	if out.Earned != deliveryPayout {
 		t.Errorf("earned = %d, want %d", out.Earned, deliveryPayout)
 	}
-	if s.Observe().LifespanDays != startLifespan-pickupCost-deliveryCost {
-		t.Errorf("lifespan = %d", s.Observe().LifespanDays)
+	if s.Observe().HealthDays != startHealth-pickupCost-deliveryCost {
+		t.Errorf("health = %d", s.Observe().HealthDays)
 	}
 }
 

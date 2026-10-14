@@ -11,10 +11,10 @@ func TestBotFundsThenFights(t *testing.T) {
 	DriveBot(w)
 	st := w.Observe()
 	if !st.Done {
-		t.Fatal("bot should exhaust the lifespan")
+		t.Fatal("bot should exhaust the health")
 	}
-	if st.LifespanDays != 0 {
-		t.Fatalf("days left = %d", st.LifespanDays)
+	if st.HealthDays != 0 {
+		t.Fatalf("days left = %d", st.HealthDays)
 	}
 	if st.Balance != totalEarned(w.ledger.Events) {
 		t.Fatalf("balance %d != earned %d", st.Balance, totalEarned(w.ledger.Events))
@@ -60,7 +60,7 @@ func TestBotDeterministicPerSeed(t *testing.T) {
 	a, b := New(9), New(9)
 	DriveBot(a)
 	DriveBot(b)
-	if a.Observe().Balance != b.Observe().Balance || a.Observe().LifespanDays != b.Observe().LifespanDays {
+	if a.Observe().Balance != b.Observe().Balance || a.Observe().HealthDays != b.Observe().HealthDays {
 		t.Fatalf("same seed diverged: %+v vs %+v", a.Observe(), b.Observe())
 	}
 }

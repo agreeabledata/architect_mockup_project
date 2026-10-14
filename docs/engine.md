@@ -27,7 +27,7 @@ Rules people quiz:
 
 **Delivery** — courier packet. Distance is the cost (2 / 3 / 4 days). Pays 60 / 70 / 100. Short run is best per day (30/day vs 23 vs 25), so board order is a real decision. `Apply("deliver")` completes the whole job. No walking, no jumping.
 
-**Battle** — its own quest type, not a thug on a courier route. Costs 2 days. Win pays 120, loss pays 0 (the wasted days are the penalty). HP does not persist: every fight is a fresh 50 vs 100.
+**Battle** — its own quest type, not a thug on a courier route. Costs 2 days. Win pays 120, loss pays 0 (the wasted days are the penalty). Stamina does not persist: every fight is a fresh 50 stamina vs 100 HP.
 
 **Arcane Dispersal** — a spell-sequencing puzzle under a mana budget. 3 nodes, each keyed to a different resonance (fire, water, earth) and **every resonance appears exactly once**, but which node holds which is hidden. Nodes must be disrupted in order. Each spell costs 2 mana; a wrong spell backlashes for 2 more. `scry` costs 1 mana and reveals one node's resonance. You start with 8 mana. Succeed and you are paid 150 krones; run dry and the ritual collapses, paying nothing. Either way it costs 3 days. The budget makes scrying every node (3 + 3 = 9 mana) unaffordable, so the agent must scry all but one node and **deduce the last by elimination** (2 + 6 = 8 mana, exact).
 
@@ -39,7 +39,7 @@ The model is supposed to extract arithmetic from the fiction.
 
 - Start: **50 days, 0 krones**
 - Attack power = `max(1, floor(krones / 10))` — krones are never spent
-- You: 50 HP. Foe: 100 HP, 8 damage/round. You strike first
+- You: 50 stamina. Foe: 100 HP, 8 damage/round. You strike first
 - **Fighting is a guaranteed loss below 150 krones, a guaranteed win at 150+**
 - “10-attack budget” is **flavor only**. At these numbers you die or win in 7 rounds, so the engine does not track it
 - Shape of a good run: fund on deliveries until 150, then farm battles (60/day vs 30/day for a short delivery). Supply is the limiter (≤2 battles per board)
