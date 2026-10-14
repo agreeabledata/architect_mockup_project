@@ -78,9 +78,12 @@ go run ./scripts/compare -from results/   # rewrite results/README.md; no API ke
 it from the example's 10 before expecting a terminal run. Within one decision a
 rejected action retries up to `decision_retry_cap` (default 3) calls; the model
 sees only the system prompt plus the last 3 turns (full history is kept in the
-transcript). The windowed context changed the model inputs, so `prompt_version`
-is now `v3` and `config_hash` inputs changed with it: transcripts from before
-that bump are **not comparable** to runs of the same model and seed after it.
+transcript). A reply with no tool call is nudged ("call one of the tools") and
+spends a retry the same way; a decision that ends on prose is `no_action`, and a
+provider error with no tool call ends the run as `provider_error`. Each change to
+model inputs bumps `prompt_version` (windowed context → `v3`, the prose nudge →
+`v4`): transcripts from before a bump are **not comparable** to runs of the same
+model and seed after it.
 
 Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
 Files from before #29 have no `kind` and will not replay; re-run the agent.
@@ -94,7 +97,7 @@ markdown table whose numbers come from those structured records — not the pros
 transcripts and rewrites [results/README.md](results/README.md); it does not
 call a model.
 A `finished n/m` column counts runs that reached `terminal`; non-terminal
-reasons (`iteration_cap`, `decision_cap`, `no_action`) are printed on stderr
+reasons (`iteration_cap`, `decision_cap`, `no_action`, `provider_error`) are printed on stderr
 and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
 (default `transcripts`). The header's `seed` is the model sampling seed;
 `engine_seed` is the world seed. `scripts/replay_visual` reads those same

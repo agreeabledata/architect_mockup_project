@@ -13,7 +13,7 @@ import (
 const reasoningParam = "reasoning"
 
 // promptVersion hashes every run transcript to the prompt it used.
-const promptVersion = "v3"
+const promptVersion = "v4"
 
 // contextTurns is how many turns of the conversation reach the model: the
 // system prompt plus the last N turns. The fresh observation restates the
@@ -164,8 +164,15 @@ type Report struct {
 	ToolCalls  int
 	Usage      Usage
 	WallTime   time.Duration
-	Reason     string // terminal | iteration_cap | decision_cap | no_action
+	Reason     string // terminal | iteration_cap | decision_cap | no_action | provider_error
+	// ProseReplies counts model replies with no tool call. Each one is nudged
+	// and spends a retry; only a decision that ends on prose is no_action.
+	ProseReplies int
 }
+
+// proseNudge follows a reply with no tool call. It is sent for the next
+// attempt only and never enters the windowed history.
+const proseNudge = "You replied without calling a tool. Choose your next action by calling exactly one of the tools."
 
 // Cost returns the dollar cost of the run on the configured model.
 func (r Report) Cost(c *Config) float64 {
@@ -201,12 +208,14 @@ decisions:
 		// up. A rejected action retries without a fresh observation -- the
 		// tool-error feedback is the next attempt's prompt.
 		decided := false
+		var nudge []Message // the prose reply and proseNudge, for the next attempt only
 		for attempt := 0; attempt < retryCap; attempt++ {
 			if report.Iterations >= a.Config.IterationCap {
 				report.Reason = "iteration_cap"
 				break decisions
 			}
-			res, err := a.Provider.Chat(ctx, lastTurns(msgs, contextTurns), actionsToTools(actions), CallOptions{
+			window := lastTurns(msgs, contextTurns)
+			res, err := a.Provider.Chat(ctx, append(window[:len(window):len(window)], nudge...), actionsToTools(actions), CallOptions{
 				Model:       a.Config.Model,
 				MaxTokens:   a.Config.MaxTokens,
 				Temperature: a.Config.Temperature,
@@ -219,17 +228,26 @@ decisions:
 			report.Iterations++
 			report.Usage = addUsage(report.Usage, res.Usage)
 			if a.Transcript != nil {
-				if err := a.Transcript.Record(msgs, res); err != nil {
+				if err := a.Transcript.Record(append(msgs[:len(msgs):len(msgs)], nudge...), res); err != nil {
 					return report, fmt.Errorf("transcript: %w", err)
 				}
 			}
 
 			assistant := Message{Role: RoleAssistant, Content: res.Content, ToolCalls: res.ToolCalls}
-			msgs = append(msgs, assistant)
 			if len(res.ToolCalls) == 0 {
-				report.Reason = "no_action"
-				break decisions
+				if res.StopReason == StopReasonError {
+					report.Reason = "provider_error"
+					break decisions
+				}
+				report.ProseReplies++
+				nudge = []Message{{Role: RoleUser, Content: proseNudge}}
+				if res.Content != "" { // an empty assistant text block is a 400 on Anthropic
+					nudge = append([]Message{assistant}, nudge...)
+				}
+				continue
 			}
+			nudge = nil
+			msgs = append(msgs, assistant)
 			for _, tc := range res.ToolCalls {
 				report.ToolCalls++
 				before := g.Observe()
@@ -251,7 +269,13 @@ decisions:
 				continue decisions
 			}
 		}
+		// The decision's last attempt decides the label: prose means the model
+		// would not act; otherwise its actions kept being rejected. Hitting the
+		// iteration cap mid-decision is labeled iteration_cap above instead.
 		report.Reason = "decision_cap"
+		if nudge != nil {
+			report.Reason = "no_action"
+		}
 		break
 	}
 	// The cap check precedes Observe, so the last applied action is not yet

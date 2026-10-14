@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"architect_mockup_project/engine"
@@ -24,7 +25,9 @@ type scriptedProvider struct {
 func (p *scriptedProvider) Chat(_ context.Context, msgs []Message, _ []Tool, opts CallOptions) (Result, error) {
 	p.gotMsgs = append(p.gotMsgs, append([]Message(nil), msgs...))
 	p.gotOpts = append(p.gotOpts, opts)
-	res := p.plan[p.calls]
+	// Past the end of the plan the last reply repeats, so a plan ending in
+	// prose plays out its nudged retries.
+	res := p.plan[min(p.calls, len(p.plan)-1)]
 	p.calls++
 	return res, nil
 }
@@ -336,8 +339,12 @@ func TestAgentFullRun(t *testing.T) {
 	if report.Balance != 12 {
 		t.Errorf("balance = %d, want 12", report.Balance)
 	}
-	if report.Iterations != 3 {
-		t.Errorf("iterations = %d, want 3", report.Iterations)
+	// Two tool calls, then the closing prose reply plus its two nudged retries.
+	if report.Iterations != 5 {
+		t.Errorf("iterations = %d, want 5", report.Iterations)
+	}
+	if report.ProseReplies != 3 {
+		t.Errorf("prose replies = %d, want 3", report.ProseReplies)
 	}
 	if report.ToolCalls != 2 {
 		t.Errorf("tool calls = %d, want 2", report.ToolCalls)
@@ -345,11 +352,11 @@ func TestAgentFullRun(t *testing.T) {
 	if report.Reason != "no_action" {
 		t.Errorf("reason = %q, want no_action", report.Reason)
 	}
-	want := Usage{InputTokens: 60, OutputTokens: 18, TotalTokens: 78}
+	want := Usage{InputTokens: 120, OutputTokens: 32, TotalTokens: 152}
 	if report.Usage != want {
 		t.Errorf("usage = %+v, want %+v", report.Usage, want)
 	}
-	if got := report.Cost(&Config{Model: "test", Pricing: map[string]*Pricing{"test": {InputPerMillion: 1, OutputPerMillion: 2}}}); got != 6e-5+3.6e-5 {
+	if got := report.Cost(&Config{Model: "test", Pricing: map[string]*Pricing{"test": {InputPerMillion: 1, OutputPerMillion: 2}}}); got != 1.2e-4+6.4e-5 {
 		t.Errorf("cost = %v", got)
 	}
 
@@ -414,8 +421,8 @@ func TestAgentMalformedAction(t *testing.T) {
 	if err := tr.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if report.Iterations != 3 {
-		t.Errorf("iterations = %d, want 3 (loop must survive a bad action)", report.Iterations)
+	if report.Iterations != 5 {
+		t.Errorf("iterations = %d, want 5 (loop must survive a bad action)", report.Iterations)
 	}
 	var fedBack bool
 	for _, m := range prov.gotMsgs[1] {
@@ -600,11 +607,11 @@ func TestAgentWindowedContext(t *testing.T) {
 	if _, err := agent.Run(context.Background(), stub.New()); err != nil {
 		t.Fatal(err)
 	}
-	if prov.calls != 6 {
-		t.Fatalf("provider called %d times, want 6", prov.calls)
+	if prov.calls != 8 { // 5 rests, then "Done." and its two nudged retries
+		t.Fatalf("provider called %d times, want 8", prov.calls)
 	}
 
-	last := prov.gotMsgs[len(prov.gotMsgs)-1]
+	last := prov.gotMsgs[5] // the final decision's first call, before any nudge
 	if last[0].Role != RoleSystem {
 		t.Fatalf("window must start with the system prompt")
 	}
@@ -797,5 +804,86 @@ func TestAgentAppliesEveryToolCallInResponse(t *testing.T) {
 	}
 	if turns[1].Error == nil || *turns[1].Error != "run is over" {
 		t.Errorf("second turn error = %v, want run is over", turns[1].Error)
+	}
+}
+
+// A reply with no tool call is nudged and retried within the decision, and the
+// prose and nudge never enter the windowed history.
+func TestAgentNudgesProseReply(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{
+		{Content: "I think I'll deliver.", StopReason: StopReasonStop},
+		{Content: "Taking it.", ToolCalls: []ToolCall{{ID: "c1", Name: "take_delivery", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{Content: "Delivering.", ToolCalls: []ToolCall{{ID: "c2", Name: "deliver_package", Arguments: json.RawMessage("{}")}}, StopReason: StopReasonToolCalls},
+		{Content: "Done.", StopReason: StopReasonStop},
+	}}
+	agent := &Agent{Provider: prov, Config: testConfig(10)}
+	report, err := agent.Run(context.Background(), stub.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.ToolCalls != 2 || report.Balance != 12 {
+		t.Errorf("tool calls = %d, balance = %d; want 2, 12 (the run must survive a prose reply)", report.ToolCalls, report.Balance)
+	}
+	if report.Reason != "no_action" || report.ProseReplies != 4 {
+		t.Errorf("reason = %q, prose replies = %d; want no_action, 4", report.Reason, report.ProseReplies)
+	}
+	retry := prov.gotMsgs[1]
+	if n := len(retry); retry[n-1].Content != proseNudge || retry[n-2].Content != "I think I'll deliver." {
+		t.Errorf("retry must end with the prose reply and the nudge, got %+v", retry[n-2:])
+	}
+	for _, m := range prov.gotMsgs[2] {
+		if m.Content == proseNudge || m.Content == "I think I'll deliver." {
+			t.Errorf("nudge leaked into the next decision's history: %+v", m)
+		}
+	}
+}
+
+// A provider error with no tool call ends the run as provider_error, not as a
+// model that chose not to act.
+func TestAgentProviderError(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{{StopReason: StopReasonError}}}
+	agent := &Agent{Provider: prov, Config: testConfig(10)}
+	report, err := agent.Run(context.Background(), stub.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Reason != "provider_error" || prov.calls != 1 {
+		t.Errorf("reason = %q after %d calls; want provider_error after 1", report.Reason, prov.calls)
+	}
+}
+
+// An empty prose reply is not resent: Anthropic rejects empty text blocks.
+func TestAgentNudgeSkipsEmptyProse(t *testing.T) {
+	prov := &scriptedProvider{plan: []Result{
+		{StopReason: StopReasonStop},
+		{Content: "Done.", StopReason: StopReasonStop},
+	}}
+	agent := &Agent{Provider: prov, Config: testConfig(10)}
+	if _, err := agent.Run(context.Background(), stub.New()); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range prov.gotMsgs[1] {
+		if m.Role == RoleAssistant && m.Content == "" && len(m.ToolCalls) == 0 {
+			t.Fatal("empty assistant message resent with the nudge")
+		}
+	}
+	if last := prov.gotMsgs[1][len(prov.gotMsgs[1])-1]; last.Content != proseNudge {
+		t.Errorf("retry must end with the nudge, got %+v", last)
+	}
+}
+
+// Stats counts prose-only calls but not provider errors.
+func TestStatsCountsProseReplies(t *testing.T) {
+	log, err := LoadTranscript(strings.NewReader(`{"kind":"header","model":"m"}
+{"kind":"call","result":{"tool_calls":[{"ID":"a","Name":"rest","Arguments":{"reasoning":"r"}}],"stop_reason":"tool_calls"}}
+{"kind":"turn","turn":1,"day":1,"balance":0,"action":"rest","args":{},"earned":0,"days_spent":1,"error":null}
+{"kind":"call","result":{"tool_calls":null,"stop_reason":"stop"}}
+{"kind":"call","result":{"tool_calls":null,"stop_reason":"error"}}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := log.Stats().ProseReplies; got != 1 {
+		t.Errorf("prose replies = %d, want 1", got)
 	}
 }
