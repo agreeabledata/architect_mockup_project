@@ -282,3 +282,27 @@ func TestLoadTranscriptMissingKind(t *testing.T) {
 		t.Errorf("error should mention pre-#29: %v", err)
 	}
 }
+
+// The header carries the model's price at run time, and Stats reads it back.
+func TestHeaderRecordsPricing(t *testing.T) {
+	cfg := &Config{Provider: "openrouter", Model: "m", Pricing: map[string]*Pricing{
+		"m": {InputPerMillion: 0.1, OutputPerMillion: 0.32}, "local": nil,
+	}}
+	var buf bytes.Buffer
+	b, err := json.Marshal(transcriptHeader(cfg, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(append(b, '\n'))
+	log, err := LoadTranscript(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := log.Stats().Pricing; p == nil || *p != (Pricing{InputPerMillion: 0.1, OutputPerMillion: 0.32}) {
+		t.Errorf("pricing = %+v, want the run-time price", p)
+	}
+	cfg.Model = "local"
+	if _, ok := transcriptHeader(cfg, 1)["pricing"]; ok {
+		t.Error("an unpriced model must not record pricing")
+	}
+}

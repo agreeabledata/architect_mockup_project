@@ -66,7 +66,7 @@ func transcriptHeader(cfg *Config, engineSeed uint32) map[string]any {
 			"engine_seed": engineSeed,
 		}
 	}
-	return map[string]any{
+	h := map[string]any{
 		"kind":               kindHeader,
 		"provider":           cfg.Provider,
 		"model":              cfg.Model,
@@ -79,6 +79,12 @@ func transcriptHeader(cfg *Config, engineSeed uint32) map[string]any {
 		"context_turns":      contextTurns,
 		"max_tokens":         cfg.MaxTokens,
 	}
+	// The price at run time travels with the run, so a later repricing cannot
+	// re-price it. Unpriced models (missing or null) record nothing.
+	if p := cfg.Pricing[cfg.Model]; p != nil {
+		h["pricing"] = p
+	}
+	return h
 }
 
 func (t *Transcript) write(v any) error {
