@@ -3,3 +3,4 @@ transcripts/
 config.json
 .idea/
 *.local.json
+bin/
