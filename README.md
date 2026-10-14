@@ -67,6 +67,8 @@ cp config.example.json config.json   # pick a provider; local Ollama needs no ke
 go run ./scripts/run_agent -seed 1   # real engine; add -stub for the stub
 go run ./scripts/run_bot -seed 1     # scripted baseline, no model
 go run ./scripts/replay transcripts/run_….jsonl   # one line per turn, from kind=="turn"
+go run ./scripts/replay_visual transcripts/run_….jsonl   # self-contained HTML animation
+go run ./scripts/visualize   # Watch a run: Ebiten window, newest in transcripts/
 go run ./scripts/compare -seeds 1,2,3 -configs bot,config.json
 # optional: -transcripts dir  (default transcripts)
 ```
@@ -91,7 +93,21 @@ A `finished n/m` column counts runs that reached `terminal`; non-terminal
 reasons (`iteration_cap`, `decision_cap`, `no_action`) are printed on stderr
 and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
 (default `transcripts`). The header's `seed` is the model sampling seed;
-`engine_seed` is the world seed.
+`engine_seed` is the world seed. `scripts/replay_visual` reads those same
+records through the same parser and writes one self-contained HTML file
+(`-out` to pick the path, default `<transcript>.html`) that animates the run
+with 2D shapes and text — a lifespan track, a balance meter, the current action
+and its reasoning. The engine stays headless; open the file in a browser.
+`scripts/visualize` watches the same frames in an Ebiten window (`←`/`→` step,
+`P` play/pause, `R` restart, `esc` quit; `-frame n` opens at a turn; with no path
+it opens the newest `.jsonl` in `transcripts/`) and
+additionally replays the engine to draw the quest board each turn, so the board
+shown is the board the agent saw. A token glides between the quest cards as the
+run advances; that motion is cosmetic — the transcript records decisions, not
+positions. `-shot out.png` renders one frame straight
+from the framebuffer and exits, so screenshots are reproducible without a
+compositor. Both commands read through `harness.LoadTranscript`; `visualize`
+needs a display and Ebiten v2.10 (pure Go, no cgo or system headers to build).
 
 **Running against OpenRouter.** OpenRouter speaks the OpenAI-compatible Chat
 Completions API, so it reuses the existing client — no new provider code. Set
