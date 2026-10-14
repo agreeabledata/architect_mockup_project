@@ -99,7 +99,9 @@ runs the greedy bot as the baseline, then each config on each seed, and prints a
 markdown table whose numbers come from those structured records — not the prose.
 `go run ./scripts/compare -from results/` rebuilds that table from the committed
 transcripts and rewrites [results/README.md](results/README.md); it does not
-call a model.
+call a model. Costs come from `results/pricing.json`, the prices at the time the
+runs were committed; add a model's entry there when committing its first runs
+(`-from` on a directory without one fails rather than guessing prices).
 A `finished n/m` column counts runs that reached `terminal`; non-terminal
 reasons (`iteration_cap`, `decision_cap`, `no_action`, `provider_error`) are printed on stderr
 and footnoted under the table. Compare writes per-run JSONL under `-transcripts`

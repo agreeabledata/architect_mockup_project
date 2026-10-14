@@ -31,7 +31,7 @@ func main() {
 	configsFlag := flag.String("configs", "", "comma-separated config paths; bot is always the first row")
 	dir := flag.String("transcripts", "transcripts", "directory for per-run transcripts")
 	from := flag.String("from", "", "committed-transcript directory; writes <dir>/README.md and does not run models")
-	pricing := flag.String("pricing", "config.example.json", "pricing file for -from cost cells")
+	pricing := flag.String("pricing", "", "pricing file for -from cost cells (default <dir>/pricing.json, frozen when the runs were committed)")
 	flag.Parse()
 
 	if *from != "" {
