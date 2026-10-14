@@ -1,0 +1,2 @@
+run_20260914T183126.275447000Z.jsonl — #16 acceptance run: OpenRouter meta-llama/llama-3.3-70b-instruct, prompt_version v3, no engine_seed field, last turn day 50, balance 1540; recorded 2026-09-14 before the board changes in #28 and #34, so it is not a current-main score.
+run_20260914T184721.600107000Z.jsonl — README's 330-krone bail: same model and config hash, 12 calls, last turn day 16, balance 330, reason no_action; same missing engine_seed and the same old board.
