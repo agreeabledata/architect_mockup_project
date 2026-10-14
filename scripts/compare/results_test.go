@@ -123,3 +123,28 @@ func assertCommittedRun(t *testing.T, model string, seed uint32, path string) {
 		t.Errorf("%s missing config_hash", path)
 	}
 }
+
+// -from prices runs from <dir>/pricing.json, not the live example config, so a
+// repricing elsewhere cannot rewrite committed results.
+func TestFromUsesFrozenPricing(t *testing.T) {
+	src := filepath.Join("..", "..", "results")
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(src)); err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := buildFrom(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doubled := `{"pricing":{"meta-llama/llama-3.3-70b-instruct":{"input_per_million":20,"output_per_million":64},"mistralai/mistral-small-3.2-24b-instruct":{"input_per_million":9.4,"output_per_million":25}}}`
+	if err := os.WriteFile(filepath.Join(dir, "pricing.json"), []byte(doubled), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repriced, err := buildFrom(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frozen == repriced {
+		t.Fatal("cost cells ignore <dir>/pricing.json")
+	}
+}

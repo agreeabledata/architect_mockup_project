@@ -93,7 +93,8 @@ markdown table whose numbers come from those structured records — not the pros
 `go run ./scripts/compare -from results/` rebuilds that table from the committed
 transcripts and rewrites [results/README.md](results/README.md); it does not
 call a model. Costs come from `results/pricing.json`, the prices at the time the
-runs were committed; add a model's entry there when committing its first runs.
+runs were committed; add a model's entry there when committing its first runs
+(`-from` on a directory without one fails rather than guessing prices).
 A `finished n/m` column counts runs that reached `terminal`; non-terminal
 reasons (`iteration_cap`, `decision_cap`, `no_action`) are printed on stderr
 and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
