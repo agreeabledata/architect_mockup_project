@@ -16,11 +16,15 @@ import (
 // successful fight whose balance-before (balance - earned) is below it lost on
 // purpose. Derived, not hardcoded, so a balance change cannot silently skew it.
 var fightWinBalance = func() int {
-	b := 0
-	for !engine.WinsBattle(b) {
-		b++
+	for b := 0; b < 1_000_000; b++ {
+		if engine.WinsBattle(b) {
+			if b > 0 && engine.WinsBattle(b-1) {
+				panic("compare: WinsBattle is not monotonic in balance")
+			}
+			return b
+		}
 	}
-	return b
+	panic("compare: WinsBattle never holds; no fight threshold")
 }()
 
 // scoredRun is one committed full-game transcript.
