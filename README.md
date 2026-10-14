@@ -186,8 +186,8 @@ and "HP" for two different 50s.)
   the fiction and fights only when it can win (or when the ROI beats other uses
   of those turns).
 - **Settled:** entry cost 2 days, win pays 120, a loss pays 0 (the wasted days are
-  the penalty — no negative payouts in v1). The agent observes its own balance, its
-  remaining health, and the opponent's HP and damage; the win condition is
+  the penalty — no negative payouts in v1). The agent observes its own balance and
+  stamina, and the opponent's HP and damage; the win condition is
   derivable from those and nothing else. The 10-attack budget **stays in the quest
   prose as a deliberate distractor but is not implemented** — the agent dies or wins
   within 7 attacks at these numbers, so tracking it would be dead code.

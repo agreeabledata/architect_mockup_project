@@ -160,7 +160,7 @@ func (w *World) applyAccept(raw json.RawMessage) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no open quest %q", id)
 	}
 	if q.Days > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to take %q", id)
+		return Outcome{}, fmt.Errorf("not enough health (days) to take %q", id)
 	}
 	q.Status = QuestActive
 	w.activeID = q.ID
@@ -174,7 +174,7 @@ func (w *World) applyDeliver() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no delivery in hand")
 	}
 	if q.Days > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to deliver")
+		return Outcome{}, fmt.Errorf("not enough health (days) to deliver")
 	}
 	pay := q.Payout
 	title := q.Title
@@ -194,7 +194,7 @@ func (w *World) applyFight() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no battle posted")
 	}
 	if CostBattle > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to fight")
+		return Outcome{}, fmt.Errorf("not enough health (days) to fight")
 	}
 	title := q.Title
 	won, story := duelStory(w.ledger.Krone)
@@ -370,7 +370,7 @@ func (w *World) applyRefresh() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("cannot refresh while a quest is active")
 	}
 	if w.ledger.Days < CostRefreshBoard {
-		return Outcome{}, fmt.Errorf("not enough days to refresh the board")
+		return Outcome{}, fmt.Errorf("not enough health (days) to refresh the board")
 	}
 	w.ledger = w.ledger.debitDays(CostRefreshBoard, "refresh", "Drew a fresh quest board.")
 	w.refreshCount++
@@ -482,7 +482,7 @@ func (w *World) narrative() string {
 		OpponentHP, OpponentDamage, AgentStamina, AttackBudget, PayBattleWin, PayBattleLoss, CostBattle)
 
 	if w.isDone() {
-		b.WriteString("The ledger is closed. No days remain.\n")
+		b.WriteString("The ledger is closed. No health remains.\n")
 		return b.String()
 	}
 

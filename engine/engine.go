@@ -22,7 +22,7 @@ type State struct {
 	Narrative string
 	// Balance is the agent's krone balance (the score in v1).
 	Balance int
-	// HealthDays is how many days of life remain.
+	// HealthDays is the remaining health; each day spent costs 1.
 	HealthDays int
 	// Done reports whether the run has reached a terminal state.
 	Done bool

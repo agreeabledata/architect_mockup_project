@@ -37,7 +37,7 @@ A board is **5 quests, at most 2 battles and at most 1 arcane ritual**. Refresh 
 
 The model is supposed to extract arithmetic from the fiction.
 
-- Start: **50 days, 0 krones**
+- Start: **50 health (days), 0 krones**
 - Attack power = `max(1, floor(krones / 10))` — krones are never spent
 - You: 50 stamina. Foe: 100 HP, 8 damage/round. You strike first
 - **Fighting is a guaranteed loss below 150 krones, a guaranteed win at 150+**

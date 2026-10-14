@@ -30,7 +30,7 @@ func TestStubDelivery(t *testing.T) {
 }
 
 // The duel is the word problem: whether it wins must match the arithmetic the
-// narrative states (attack = max(1, floor(krones/10)), 50 HP vs 8 dmg/round).
+// narrative states (attack = max(1, floor(krones/10)), 50 stamina vs 8 dmg/round).
 func TestStubFightMath(t *testing.T) {
 	rich := New()
 	rich.balance = 150 // attack 15, kills in 7 rounds, dies in 7 -> wins
