@@ -12,9 +12,20 @@ import (
 	"architect_mockup_project/harness"
 )
 
-// fightWinBalance is the krone balance at which WinsBattle flips. A successful
-// fight whose balance-before (balance - earned) is below it lost on purpose.
-const fightWinBalance = 150
+// fightWinBalance is the lowest krone balance at which WinsBattle holds. A
+// successful fight whose balance-before (balance - earned) is below it lost on
+// purpose. Derived, not hardcoded, so a balance change cannot silently skew it.
+var fightWinBalance = func() int {
+	for b := 0; b < 1_000_000; b++ {
+		if engine.WinsBattle(b) {
+			if b > 0 && engine.WinsBattle(b-1) {
+				panic("compare: WinsBattle is not monotonic in balance")
+			}
+			return b
+		}
+	}
+	panic("compare: WinsBattle never holds; no fight threshold")
+}()
 
 // scoredRun is one committed full-game transcript.
 type scoredRun struct {
@@ -90,7 +101,7 @@ func analysisParagraph(rows []row, groups []modelGroup, botBySeed map[uint32]sco
 	parts := make([]string, 0, len(groups)+1)
 	for _, g := range groups {
 		r := byName[g.model]
-		fights, fightSeeds := fightsUnder150(g.runs)
+		fights, fightSeeds := fightsUnderThreshold(g.runs)
 		refreshes, botRefreshes := 0, 0
 		for _, run := range g.runs {
 			refreshes += countAction(run.turns, engine.ActionRefresh)
@@ -116,9 +127,9 @@ func analysisParagraph(rows []row, groups []modelGroup, botBySeed map[uint32]sco
 
 func fightPhrase(n int, seeds []uint32) string {
 	if n == 0 {
-		return "fought under 150 krones 0 times"
+		return fmt.Sprintf("fought under %d krones 0 times", fightWinBalance)
 	}
-	return fmt.Sprintf("fought under 150 krones %s (seeds %s)", timesPhrase(n), formatSeeds(seeds))
+	return fmt.Sprintf("fought under %d krones %s (seeds %s)", fightWinBalance, timesPhrase(n), formatSeeds(seeds))
 }
 
 func timesPhrase(n int) string {
@@ -135,7 +146,7 @@ func invalidPhrase(n int) string {
 	return fmt.Sprintf("%d invalid actions", n)
 }
 
-func fightsUnder150(runs []scoredRun) (int, []uint32) {
+func fightsUnderThreshold(runs []scoredRun) (int, []uint32) {
 	var n int
 	var seeds []uint32
 	for _, run := range runs {
