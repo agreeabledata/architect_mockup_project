@@ -1,7 +1,7 @@
 // Package visual builds a presentation model from a finished run's structured
-// transcript. It is shared by the HTML and Ebiten visualizers so both read the
-// same frames; the engine stays headless and is only replayed to recover the
-// quest board each turn (it never renders anything).
+// transcript for the HTML visualizer. The engine stays headless and is only
+// replayed to recover the quest board each turn and to check the record
+// against it (it never renders anything).
 package visual
 
 import (
