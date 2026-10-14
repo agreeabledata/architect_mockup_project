@@ -155,9 +155,21 @@ func aggregate(model string, seeds []uint32, stats []harness.RunStats, cfg *harn
 	r.gap = r.meanBal - botMean
 	if cfg == nil {
 		r.costOK = true // bot: not a model, print $0.0000
-	} else if cfg.Priced(model) {
+	} else {
+		// Each run is priced at the rate recorded in its header; runs from
+		// before that fall back to cfg. Any run with neither leaves cost n/a.
 		r.costOK = true
-		r.cost = cfg.Cost(model, r.inTok, r.outTok)
+		for _, st := range stats {
+			p := st.Pricing
+			if p == nil {
+				p = cfg.Pricing[model]
+			}
+			if p == nil {
+				r.costOK, r.cost = false, 0
+				break
+			}
+			r.cost += p.Cost(st.InputTokens, st.OutputTokens)
+		}
 	}
 	return r
 }

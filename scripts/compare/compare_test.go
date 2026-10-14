@@ -412,3 +412,29 @@ func turnLine(day, balance int, action string, earned int, invalid bool) string 
 func callLine(in, out int) string {
 	return fmt.Sprintf(`{"kind":"call","result":{"tool_calls":[],"usage":{"InputTokens":%d,"OutputTokens":%d,"TotalTokens":%d}}}`, in, out, in+out)
 }
+
+// A run's recorded price wins over the config's, so repricing the config
+// cannot re-price it; runs without one fall back to the config.
+func TestAggregateUsesRecordedPricing(t *testing.T) {
+	cfg := &harness.Config{Pricing: map[string]*harness.Pricing{"m": {InputPerMillion: 100}}}
+	r := aggregate("m", []uint32{1, 2}, []harness.RunStats{
+		{InputTokens: 1_000_000, Pricing: &harness.Pricing{InputPerMillion: 1}},
+		{InputTokens: 1_000_000},
+	}, cfg, 0)
+	if !r.costOK || r.cost != 1+100 {
+		t.Errorf("cost = %v (ok=%v), want 101: recorded 1 + config fallback 100", r.cost, r.costOK)
+	}
+	recordedOnly := aggregate("m", []uint32{1}, []harness.RunStats{
+		{InputTokens: 1_000_000, Pricing: &harness.Pricing{InputPerMillion: 1}},
+	}, &harness.Config{}, 0)
+	if !recordedOnly.costOK || recordedOnly.cost != 1 {
+		t.Errorf("cost = %v (ok=%v), want 1 with no config entry", recordedOnly.cost, recordedOnly.costOK)
+	}
+	partial := aggregate("m", []uint32{1, 2}, []harness.RunStats{
+		{InputTokens: 1_000_000, Pricing: &harness.Pricing{InputPerMillion: 1}},
+		{InputTokens: 1_000_000},
+	}, &harness.Config{}, 0)
+	if partial.costOK || formatCost(partial) != "n/a" {
+		t.Errorf("cost cell = %s, want n/a when any run has no price", formatCost(partial))
+	}
+}

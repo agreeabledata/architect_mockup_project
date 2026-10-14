@@ -159,6 +159,13 @@ func (l *TranscriptLog) Stats() RunStats {
 	if m, ok := l.Header["model"].(string); ok {
 		st.Model = m
 	}
+	if p, ok := l.Header["pricing"].(map[string]any); ok {
+		in, inOK := p["input_per_million"].(float64)
+		out, outOK := p["output_per_million"].(float64)
+		if inOK && outOK {
+			st.Pricing = &Pricing{InputPerMillion: in, OutputPerMillion: out}
+		}
+	}
 	st.ModelCalls = len(l.Calls)
 	for _, c := range l.Calls {
 		st.InputTokens += c.Usage.InputTokens
@@ -186,6 +193,7 @@ type RunStats struct {
 	InputTokens    int64
 	OutputTokens   int64
 	InvalidActions int
-	ProseReplies   int    // model replies with no tool call (each nudged); provider errors excluded
-	Reason         string // terminal | iteration_cap | decision_cap | no_action | provider_error; empty for bot logs
+	ProseReplies   int      // model replies with no tool call (each nudged); provider errors excluded
+	Pricing        *Pricing // price recorded in the header at run time; nil for older or unpriced runs
+	Reason         string   // terminal | iteration_cap | decision_cap | no_action | provider_error; empty for bot logs
 }

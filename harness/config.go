@@ -90,7 +90,11 @@ func (c *Config) Priced(model string) bool {
 // Cost returns the dollar cost of token usage on a model, or 0 for free/local
 // and for models with no pricing entry. Call Priced to distinguish those.
 func (c *Config) Cost(model string, in, out int64) float64 {
-	p := c.Pricing[model]
+	return c.Pricing[model].Cost(in, out)
+}
+
+// Cost returns the dollar cost of the given token counts; 0 for a nil Pricing.
+func (p *Pricing) Cost(in, out int64) float64 {
 	if p == nil {
 		return 0
 	}
