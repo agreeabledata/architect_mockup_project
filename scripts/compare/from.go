@@ -46,6 +46,11 @@ func buildFrom(dir, pricingPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Committed runs keep the prices they were run at, so a repricing in
+	// config.example.json neither rewrites history nor breaks the byte test.
+	if pricingPath == "" {
+		pricingPath = filepath.Join(dir, "pricing.json")
+	}
 	priceCfg, err := harness.LoadConfig(pricingPath)
 	if err != nil {
 		return "", fmt.Errorf("pricing: %w", err)

@@ -69,7 +69,7 @@ func TestCommittedResults(t *testing.T) {
 		}
 	}
 
-	body, err := buildFrom(dir, "config.example.json")
+	body, err := buildFrom(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
