@@ -75,7 +75,8 @@ go run ./scripts/compare -from results/   # rewrite results/README.md; no API ke
 ```
 
 `make build` puts every script as a binary in `bin/`; `make install` puts them in
-`$(go env GOPATH)/bin`. `make test` runs the same gofmt, vet and test steps as CI.
+`$GOBIN` (default `$(go env GOPATH)/bin`). `make test` runs the same checks as CI
+(gofmt, vet, test, and the seed-1 bot baseline).
 
 `iteration_cap` bounds model calls per run; a full game takes ~40–50, so raise
 it from the example's 10 before expecting a terminal run. Within one decision a
