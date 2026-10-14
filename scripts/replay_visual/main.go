@@ -142,6 +142,10 @@ function draw() {
   ctx.font = '13px ui-monospace, monospace';
   ctx.fillText('engine seed ' + SCENE.engine_seed + '   \u00b7   final ' + pad(SCENE.final_balance) +
                ' krones   \u00b7   earned ' + pad(SCENE.total_earned), 40, 66);
+  if (SCENE.diverged_at) {
+    ctx.fillStyle = '#f2b04a';
+    ctx.fillText('! engine replay diverged from the recorded run at turn ' + SCENE.diverged_at, 40, 86);
+  }
 
   if (!F.length) {
     ctx.fillStyle = '#8b90a0';
