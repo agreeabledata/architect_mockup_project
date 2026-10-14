@@ -305,4 +305,18 @@ func TestHeaderRecordsPricing(t *testing.T) {
 	if _, ok := transcriptHeader(cfg, 1)["pricing"]; ok {
 		t.Error("an unpriced model must not record pricing")
 	}
+
+	// A free (explicit zero) price is recorded and read back, not dropped.
+	cfg.Model, cfg.Pricing["free"] = "free", &Pricing{}
+	b, err = json.Marshal(transcriptHeader(cfg, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err = LoadTranscript(bytes.NewReader(append(b, '\n')))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := log.Stats().Pricing; p == nil || *p != (Pricing{}) {
+		t.Errorf("free pricing = %+v, want a non-nil zero price", p)
+	}
 }

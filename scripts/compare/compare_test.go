@@ -430,4 +430,11 @@ func TestAggregateUsesRecordedPricing(t *testing.T) {
 	if !recordedOnly.costOK || recordedOnly.cost != 1 {
 		t.Errorf("cost = %v (ok=%v), want 1 with no config entry", recordedOnly.cost, recordedOnly.costOK)
 	}
+	partial := aggregate("m", []uint32{1, 2}, []harness.RunStats{
+		{InputTokens: 1_000_000, Pricing: &harness.Pricing{InputPerMillion: 1}},
+		{InputTokens: 1_000_000},
+	}, &harness.Config{}, 0)
+	if partial.costOK || formatCost(partial) != "n/a" {
+		t.Errorf("cost cell = %s, want n/a when any run has no price", formatCost(partial))
+	}
 }
