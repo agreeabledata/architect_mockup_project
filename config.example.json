@@ -12,8 +12,10 @@
   "pricing": {
     "deepseek-chat": { "input_per_million": 0.27, "output_per_million": 1.10 },
     "gpt-5.2": { "input_per_million": 1.25, "output_per_million": 10.0 },
-    "meta-llama/llama-3.3-70b-instruct": { "input_per_million": 0.13, "output_per_million": 0.39 },
-    "deepseek/deepseek-chat": { "input_per_million": 0.27, "output_per_million": 1.10 },
-    "llama3.2": null
+    "meta-llama/llama-3.3-70b-instruct": { "input_per_million": 0.10, "output_per_million": 0.32 },
+    "deepseek/deepseek-chat": { "input_per_million": 0.32, "output_per_million": 0.89 },
+    "mistralai/mistral-small-3.2-24b-instruct": { "input_per_million": 0.094, "output_per_million": 0.250 },
+    "llama3.2": null,
+    "llama3.2:3b": { "input_per_million": 0, "output_per_million": 0 }
   }
 }

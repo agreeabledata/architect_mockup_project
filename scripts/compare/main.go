@@ -2,6 +2,11 @@
 // same seeds and prints a markdown comparison table.
 //
 //	go run ./scripts/compare -seeds 1,2,3 -configs bot,ollama.json,deepseek.json
+//
+// -from rebuilds that table from committed transcripts and writes
+// <dir>/README.md. It does not call a model or the bot.
+//
+//	go run ./scripts/compare -from results/
 package main
 
 import (
@@ -10,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -24,7 +30,20 @@ func main() {
 	seedsFlag := flag.String("seeds", "1", "comma-separated engine seeds")
 	configsFlag := flag.String("configs", "", "comma-separated config paths; bot is always the first row")
 	dir := flag.String("transcripts", "transcripts", "directory for per-run transcripts")
+	from := flag.String("from", "", "committed-transcript directory; writes <dir>/README.md and does not run models")
+	pricing := flag.String("pricing", "config.example.json", "pricing file for -from cost cells")
 	flag.Parse()
+
+	if *from != "" {
+		if len(parseConfigs(*configsFlag)) > 0 {
+			fail("-from reads committed transcripts and does not run models; omit -configs")
+		}
+		if err := writeFrom(*from, *pricing); err != nil {
+			fail("%v", err)
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s\n", filepath.Join(*from, "README.md"))
+		return
+	}
 
 	seeds, err := parseSeeds(*seedsFlag)
 	if err != nil {
@@ -136,9 +155,9 @@ func aggregate(model string, seeds []uint32, stats []harness.RunStats, cfg *harn
 	r.gap = r.meanBal - botMean
 	if cfg == nil {
 		r.costOK = true // bot: not a model, print $0.0000
-	} else if cfg.Priced(cfg.Model) {
+	} else if cfg.Priced(model) {
 		r.costOK = true
-		r.cost = cfg.Cost(cfg.Model, r.inTok, r.outTok)
+		r.cost = cfg.Cost(model, r.inTok, r.outTok)
 	}
 	return r
 }
