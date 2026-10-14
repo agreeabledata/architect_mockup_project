@@ -382,6 +382,9 @@ func (g *game) drawHeader(screen *ebiten.Image) {
 	line := fmt.Sprintf("engine seed %d   ·   final %d krones   ·   earned %d   ·   turn %d/%d",
 		g.sc.EngineSeed, g.sc.FinalBal, g.sc.TotalEarned, g.v.idx+1, len(g.sc.Frames))
 	ebitenutil.DebugPrintAt(screen, line, 40, 50)
+	if g.sc.DivergedAt > 0 {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("! replay diverged from the recorded run at turn %d; board not shown from there", g.sc.DivergedAt), 40, 8)
+	}
 }
 
 func (g *game) drawBars(screen *ebiten.Image, f visual.Frame) {
@@ -445,7 +448,7 @@ func (g *game) drawBoard(screen *ebiten.Image, f visual.Frame) {
 	const x0, y, cw, ch, gap = float32(boardX), float32(boardY), float32(cardW), float32(cardH), float32(cardGap)
 	ebitenutil.DebugPrintAt(screen, "quest board (as the agent saw it)", 40, int(y)-18)
 	if f.Board == nil {
-		ebitenutil.DebugPrintAt(screen, "board unavailable (no engine_seed in header)", 40, int(y)+16)
+		ebitenutil.DebugPrintAt(screen, "board unavailable (no engine_seed in header, or the replay diverged)", 40, int(y)+16)
 		return
 	}
 	for i, q := range f.Board {

@@ -48,13 +48,17 @@ type QuestView struct {
 
 // Scene is everything a viewer needs: header summary plus one frame per turn.
 type Scene struct {
-	Model       string  `json:"model"`
-	Provider    string  `json:"provider"`
-	EngineSeed  int     `json:"engine_seed"`
-	FinalBal    int     `json:"final_balance"`
-	TotalEarned int     `json:"total_earned"`
-	MaxDay      int     `json:"max_day"`
-	Frames      []Frame `json:"frames"`
+	Model       string `json:"model"`
+	Provider    string `json:"provider"`
+	EngineSeed  int    `json:"engine_seed"`
+	FinalBal    int    `json:"final_balance"`
+	TotalEarned int    `json:"total_earned"`
+	MaxDay      int    `json:"max_day"`
+	// DivergedAt is the first turn whose replayed outcome (accepted or
+	// rejected, balance, day) differs from the recorded one, e.g. because the
+	// engine changed since the run. Frames from it on carry no Board. 0 = none.
+	DivergedAt int     `json:"diverged_at,omitempty"`
+	Frames     []Frame `json:"frames"`
 }
 
 // BuildScene turns a parsed transcript into the viewers' animation model. It
@@ -98,17 +102,24 @@ func BuildScene(log *harness.TranscriptLog) Scene {
 }
 
 // replayBoards re-applies each recorded action to a fresh engine so every
-// frame carries the board and legal actions the agent saw. Rejected actions
-// return an error and leave the world unchanged, which is the expected case
-// for the transcript's error turns, so the error is deliberately ignored.
+// frame carries the board and legal actions the agent saw. Each replayed
+// outcome is checked against the record (error turns must be rejected again);
+// at the first mismatch the boards stop, since every later one would be wrong.
 func replayBoards(sc *Scene, turns []harness.TurnRecord) {
 	w := engine.New(uint32(sc.EngineSeed))
+	startRemaining := w.Observe().LifespanDays // as newTurnRecord measures day
 	for i := range sc.Frames {
 		sc.Frames[i].Board = boardView(w)
 		sc.Frames[i].Legal = legalNames(w)
 		sc.Frames[i].Active = activeID(sc.Frames[i].Board)
-		args, _ := json.Marshal(turns[i].Args)
-		_, _ = w.Apply(turns[i].Action, args)
+		t := turns[i]
+		args, _ := json.Marshal(t.Args)
+		out, err := w.Apply(t.Action, args)
+		if (err != nil) != (t.Error != nil) ||
+			err == nil && (out.Balance != t.Balance || out.Earned != t.Earned || startRemaining-out.LifespanDays != t.Day) {
+			sc.DivergedAt = t.Turn
+			return
+		}
 	}
 }
 

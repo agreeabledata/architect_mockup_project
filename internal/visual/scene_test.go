@@ -33,6 +33,9 @@ func TestReplayBoardMatchesEngine(t *testing.T) {
 	if len(sc.Frames) == 0 {
 		t.Fatal("no frames from a real bot run")
 	}
+	if sc.DivergedAt != 0 {
+		t.Errorf("a fresh bot run diverged from its own replay at turn %d", sc.DivergedAt)
+	}
 	if sc.FinalBal != 1820 {
 		t.Errorf("final balance = %d, want the seed-1 bot baseline 1820", sc.FinalBal)
 	}
@@ -71,8 +74,8 @@ func TestReplayBoardMatchesEngine(t *testing.T) {
 func TestRejectedActionLeavesBoardUnchanged(t *testing.T) {
 	log, err := harness.LoadTranscript(strings.NewReader(`
 {"kind":"header","provider":"bot","model":"bot","engine_seed":1}
-{"kind":"turn","turn":1,"day":50,"balance":0,"action":"accept_quest","args":{"quest_id":"nope"},"earned":0,"days_spent":0,"error":"no open quest \"nope\""}
-{"kind":"turn","turn":2,"day":49,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":1,"error":null}
+{"kind":"turn","turn":1,"day":0,"balance":0,"action":"accept_quest","args":{"quest_id":"nope"},"earned":0,"days_spent":0,"error":"no open quest \"nope\""}
+{"kind":"turn","turn":2,"day":1,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":1,"error":null}
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +86,37 @@ func TestRejectedActionLeavesBoardUnchanged(t *testing.T) {
 	}
 	if !equal(questIDs(sc.Frames[0].Board), questIDs(sc.Frames[1].Board)) {
 		t.Fatal("a rejected action changed the board shown on the next frame")
+	}
+	if sc.DivergedAt != 0 {
+		t.Errorf("diverged at turn %d; the record matches the engine", sc.DivergedAt)
+	}
+}
+
+// A record the engine no longer reproduces is flagged at its turn, and later
+// frames drop the board rather than show one the agent never saw.
+func TestReplayFlagsDivergence(t *testing.T) {
+	for name, turn2 := range map[string]string{
+		"balance":  `"day":1,"balance":5,"action":"refresh_board","args":{},"earned":5,"days_spent":1,"error":null`,
+		"day":      `"day":3,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":3,"error":null`,
+		"rejected": `"day":1,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":0,"error":"rejected"`,
+		"accepted": `"day":0,"balance":0,"action":"accept_quest","args":{"quest_id":"nope"},"earned":0,"days_spent":1,"error":null`,
+	} {
+		log, err := harness.LoadTranscript(strings.NewReader(`
+{"kind":"header","provider":"bot","model":"bot","engine_seed":1}
+{"kind":"turn","turn":1,"day":1,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":1,"error":null}
+{"kind":"turn","turn":2,` + turn2 + `}
+{"kind":"turn","turn":3,"day":2,"balance":0,"action":"refresh_board","args":{},"earned":0,"days_spent":1,"error":null}
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sc := BuildScene(log)
+		if sc.DivergedAt != 2 {
+			t.Errorf("%s: diverged at %d, want 2", name, sc.DivergedAt)
+		}
+		if sc.Frames[1].Board == nil || sc.Frames[2].Board != nil {
+			t.Errorf("%s: want a board through the diverging turn and none after it", name)
+		}
 	}
 }
 
