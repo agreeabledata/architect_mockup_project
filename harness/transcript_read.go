@@ -13,6 +13,7 @@ import (
 type CallLog struct {
 	Usage      Usage
 	Reasonings []string
+	StopReason StopReason
 }
 
 // TranscriptLog is a parsed JSONL transcript. Replay and compare read this
@@ -106,14 +107,15 @@ func parseTranscriptLine(log *TranscriptLog, raw []byte, pending *[]string) erro
 func parseCallLog(raw json.RawMessage) (CallLog, error) {
 	var rec struct {
 		Result struct {
-			ToolCalls []json.RawMessage `json:"tool_calls"`
-			Usage     Usage             `json:"usage"`
+			ToolCalls  []json.RawMessage `json:"tool_calls"`
+			Usage      Usage             `json:"usage"`
+			StopReason StopReason        `json:"stop_reason"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(raw, &rec); err != nil {
 		return CallLog{}, err
 	}
-	call := CallLog{Usage: rec.Result.Usage}
+	call := CallLog{Usage: rec.Result.Usage, StopReason: rec.Result.StopReason}
 	for _, tc := range rec.Result.ToolCalls {
 		call.Reasonings = append(call.Reasonings, reasoningFromToolCall(tc))
 	}
@@ -161,6 +163,9 @@ func (l *TranscriptLog) Stats() RunStats {
 	for _, c := range l.Calls {
 		st.InputTokens += c.Usage.InputTokens
 		st.OutputTokens += c.Usage.OutputTokens
+		if len(c.Reasonings) == 0 && c.StopReason != StopReasonError {
+			st.ProseReplies++
+		}
 	}
 	for _, t := range l.Turns {
 		if t.Error != nil {
@@ -181,5 +186,6 @@ type RunStats struct {
 	InputTokens    int64
 	OutputTokens   int64
 	InvalidActions int
-	Reason         string // terminal | iteration_cap | decision_cap | no_action; empty for bot logs
+	ProseReplies   int    // model replies with no tool call (each nudged); provider errors excluded
+	Reason         string // terminal | iteration_cap | decision_cap | no_action | provider_error; empty for bot logs
 }

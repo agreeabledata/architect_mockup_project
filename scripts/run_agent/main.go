@@ -46,7 +46,7 @@ func main() {
 	}
 	fmt.Printf("final balance %d krones\n", report.Balance)
 	fmt.Printf("iterations    %d  (cap %d)\n", report.Iterations, cfg.IterationCap)
-	fmt.Printf("tool calls    %d\n", report.ToolCalls)
+	fmt.Printf("tool calls    %d  (prose replies %d)\n", report.ToolCalls, report.ProseReplies)
 	fmt.Printf("tokens        %d in / %d out / %d total\n", report.Usage.InputTokens, report.Usage.OutputTokens, report.Usage.TotalTokens)
 	fmt.Printf("wall time     %s\n", report.WallTime)
 	fmt.Printf("cost          $%.4f\n", report.Cost(cfg))

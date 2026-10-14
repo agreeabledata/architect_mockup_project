@@ -163,7 +163,7 @@ func TestCompareModelPathNoAction(t *testing.T) {
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "m.json")
-	if err := os.WriteFile(cfgPath, []byte(`{"provider":"ollama","model":"fake-model","seed":99,"iteration_cap":1}`), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(`{"provider":"ollama","model":"fake-model","seed":99,"iteration_cap":10}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
