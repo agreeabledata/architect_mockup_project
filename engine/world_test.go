@@ -12,8 +12,8 @@ func TestNewImplementsGame(t *testing.T) {
 	if st.Done {
 		t.Fatal("fresh run should not be done")
 	}
-	if st.LifespanDays != StartingLifespanDays {
-		t.Fatalf("days = %d", st.LifespanDays)
+	if st.HealthDays != StartingHealthDays {
+		t.Fatalf("days = %d", st.HealthDays)
 	}
 	if st.Balance != StartingBalance {
 		t.Fatalf("balance = %d", st.Balance)
@@ -58,8 +58,8 @@ func TestApplyDeliver(t *testing.T) {
 	if out.Balance != PayDeliveryShort {
 		t.Fatalf("balance = %d", out.Balance)
 	}
-	if out.LifespanDays != StartingLifespanDays-2 {
-		t.Fatalf("days = %d", out.LifespanDays)
+	if out.HealthDays != StartingHealthDays-2 {
+		t.Fatalf("days = %d", out.HealthDays)
 	}
 	before := w.clone()
 	if _, err := w.Apply(ActionDeliver, nil); err == nil {
@@ -89,8 +89,8 @@ func TestFightLossAtZero(t *testing.T) {
 	if out.Earned != PayBattleLoss {
 		t.Fatalf("earned = %d", out.Earned)
 	}
-	if out.LifespanDays != StartingLifespanDays-CostBattle {
-		t.Fatalf("days = %d", out.LifespanDays)
+	if out.HealthDays != StartingHealthDays-CostBattle {
+		t.Fatalf("days = %d", out.HealthDays)
 	}
 }
 
@@ -129,8 +129,8 @@ func TestFightWinAt150(t *testing.T) {
 	if out.Earned != PayBattleWin {
 		t.Fatalf("earned = %d", out.Earned)
 	}
-	if out.LifespanDays != StartingLifespanDays-CostBattle {
-		t.Fatalf("days = %d", out.LifespanDays)
+	if out.HealthDays != StartingHealthDays-CostBattle {
+		t.Fatalf("days = %d", out.HealthDays)
 	}
 }
 
@@ -370,8 +370,8 @@ func TestArcaneSolvePaysFromBalance(t *testing.T) {
 	if out.Earned != PayArcane || out.Balance != PayArcane {
 		t.Fatalf("earned=%d balance=%d, want %d", out.Earned, out.Balance, PayArcane)
 	}
-	if out.LifespanDays != StartingLifespanDays-CostArcane {
-		t.Fatalf("days = %d", out.LifespanDays)
+	if out.HealthDays != StartingHealthDays-CostArcane {
+		t.Fatalf("days = %d", out.HealthDays)
 	}
 	if q := w.questByID("q-a"); q.Status != QuestComplete {
 		t.Fatalf("status = %s", q.Status)
@@ -420,8 +420,8 @@ func TestArcaneCollapsePaysNothing(t *testing.T) {
 	if out.Earned != 0 || out.Balance != 0 {
 		t.Fatalf("collapse earned=%d balance=%d", out.Earned, out.Balance)
 	}
-	if out.LifespanDays != StartingLifespanDays-CostArcane {
-		t.Fatalf("days = %d", out.LifespanDays)
+	if out.HealthDays != StartingHealthDays-CostArcane {
+		t.Fatalf("days = %d", out.HealthDays)
 	}
 	if q := w.questByID("q-a"); q.Status != QuestComplete {
 		t.Fatalf("status = %s", q.Status)
@@ -500,8 +500,8 @@ func TestRunEndsExactlyAtZero(t *testing.T) {
 		if !out.Done {
 			t.Fatalf("%d-day run: not done at 0 days", days)
 		}
-		if out.LifespanDays != 0 {
-			t.Fatalf("%d-day run: days = %d, want 0", days, out.LifespanDays)
+		if out.HealthDays != 0 {
+			t.Fatalf("%d-day run: days = %d, want 0", days, out.HealthDays)
 		}
 		if out.Balance != payoutForDeliveryDays(days) {
 			t.Fatalf("%d-day run: balance = %d", days, out.Balance)

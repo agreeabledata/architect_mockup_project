@@ -166,8 +166,8 @@ func deliveryBlurb(days, pay int) string {
 
 func battleBlurb() string {
 	return fmt.Sprintf(
-		"A foe (%d HP) holds the road. Each round it deals %d damage to your %d HP. Tales speak of a %d-attack budget. Your attack power is max(1, floor(krones/10)). Winning pays %d krones; losing pays nothing.",
-		OpponentHP, OpponentDamage, AgentHP, AttackBudget, PayBattleWin,
+		"A foe (%d HP) holds the road. Each round it deals %d damage to your %d stamina. Tales speak of a %d-attack budget. Your attack power is max(1, floor(krones/10)). Winning pays %d krones; losing pays nothing.",
+		OpponentHP, OpponentDamage, AgentStamina, AttackBudget, PayBattleWin,
 	)
 }
 

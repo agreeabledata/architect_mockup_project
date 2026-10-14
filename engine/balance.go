@@ -5,12 +5,12 @@ package engine
 // The engine reads these; nothing else sets the economy. Tuning difficulty
 // (issue #7's knob) means editing this file and nothing else.
 const (
-	// StartingLifespanDays is the agent's whole run. One day = one turn.
-	StartingLifespanDays = 50
+	// StartingHealthDays is the agent's whole run. One day = one turn.
+	StartingHealthDays = 50
 	// StartingBalance is zero: the agent must fund its own combat power.
 	StartingBalance = 0
 
-	// Lifespan costs.
+	// Health costs.
 	CostRefreshBoard   = 1 // draw a fresh board of quests
 	CostBattle         = 2
 	CostDeliveryPerLeg = 1 // a delivery's distance is its cost in days
@@ -51,7 +51,7 @@ const (
 
 // Duel constants (issue #1 spec, coin-powered).
 const (
-	AgentHP        = 50
+	AgentStamina   = 50
 	OpponentHP     = 100
 	OpponentDamage = 8
 	// AttackBudget is fiction only: the quest text tells the agent it has 10
@@ -79,18 +79,18 @@ func AttackPower(balance int) int {
 }
 
 // WinsBattle reports whether an agent holding balance beats the v1 opponent.
-// The duel is deterministic: the agent strikes first, so it lands ceil(AgentHP/
+// The duel is deterministic: the agent strikes first, so it lands ceil(AgentStamina/
 // OpponentDamage) attacks before dying. Whether to fight is therefore pure
 // arithmetic the agent can do from what it observes -- that is the eval.
 func WinsBattle(balance int) bool {
-	hp, foe := AgentHP, OpponentHP
+	stamina, foe := AgentStamina, OpponentHP
 	for {
 		foe -= AttackPower(balance)
 		if foe <= 0 {
 			return true
 		}
-		hp -= OpponentDamage
-		if hp <= 0 {
+		stamina -= OpponentDamage
+		if stamina <= 0 {
 			return false
 		}
 	}

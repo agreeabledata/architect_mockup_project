@@ -16,7 +16,7 @@ const (
 	ActionRefresh = "refresh_board"
 )
 
-// World is the v1 decision-level engine: a seeded quest board, a lifespan
+// World is the v1 decision-level engine: a seeded quest board, a health
 // ledger, and a deterministic duel. It implements Game. There is no physics
 // and no per-frame input — one Apply is one whole decision.
 type World struct {
@@ -55,10 +55,10 @@ func (w *World) Board() []Quest {
 // Observe implements Game.
 func (w *World) Observe() State {
 	return State{
-		Narrative:    w.narrative(),
-		Balance:      w.ledger.Krone,
-		LifespanDays: w.ledger.Days,
-		Done:         w.isDone(),
+		Narrative:  w.narrative(),
+		Balance:    w.ledger.Krone,
+		HealthDays: w.ledger.Days,
+		Done:       w.isDone(),
 	}
 }
 
@@ -76,8 +76,8 @@ func (w *World) LegalActions() []Action {
 			return []Action{{
 				Name: ActionFight,
 				Description: fmt.Sprintf(
-					"Fight the posted foe. Costs %d days. Winning pays %d krones; losing pays %d. Outcome is determined by your attack power max(1, floor(krones/10)) against a %d HP foe dealing %d per round to your %d HP.",
-					CostBattle, PayBattleWin, PayBattleLoss, OpponentHP, OpponentDamage, AgentHP,
+					"Fight the posted foe. Costs %d days. Winning pays %d krones; losing pays %d. Outcome is determined by your attack power max(1, floor(krones/10)) against a %d HP foe dealing %d per round to your %d stamina.",
+					CostBattle, PayBattleWin, PayBattleLoss, OpponentHP, OpponentDamage, AgentStamina,
 				),
 			}}
 		}
@@ -160,7 +160,7 @@ func (w *World) applyAccept(raw json.RawMessage) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no open quest %q", id)
 	}
 	if q.Days > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to take %q", id)
+		return Outcome{}, fmt.Errorf("not enough health (days) to take %q", id)
 	}
 	q.Status = QuestActive
 	w.activeID = q.ID
@@ -174,7 +174,7 @@ func (w *World) applyDeliver() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no delivery in hand")
 	}
 	if q.Days > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to deliver")
+		return Outcome{}, fmt.Errorf("not enough health (days) to deliver")
 	}
 	pay := q.Payout
 	title := q.Title
@@ -194,7 +194,7 @@ func (w *World) applyFight() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("no battle posted")
 	}
 	if CostBattle > w.ledger.Days {
-		return Outcome{}, fmt.Errorf("not enough days to fight")
+		return Outcome{}, fmt.Errorf("not enough health (days) to fight")
 	}
 	title := q.Title
 	won, story := duelStory(w.ledger.Krone)
@@ -370,7 +370,7 @@ func (w *World) applyRefresh() (Outcome, error) {
 		return Outcome{}, fmt.Errorf("cannot refresh while a quest is active")
 	}
 	if w.ledger.Days < CostRefreshBoard {
-		return Outcome{}, fmt.Errorf("not enough days to refresh the board")
+		return Outcome{}, fmt.Errorf("not enough health (days) to refresh the board")
 	}
 	w.ledger = w.ledger.debitDays(CostRefreshBoard, "refresh", "Drew a fresh quest board.")
 	w.refreshCount++
@@ -393,11 +393,11 @@ func (w *World) markDoneIfSpent() {
 
 func (w *World) outcome(earned int, msg string) Outcome {
 	return Outcome{
-		Narrative:    msg,
-		Balance:      w.ledger.Krone,
-		LifespanDays: w.ledger.Days,
-		Earned:       earned,
-		Done:         w.isDone(),
+		Narrative:  msg,
+		Balance:    w.ledger.Krone,
+		HealthDays: w.ledger.Days,
+		Earned:     earned,
+		Done:       w.isDone(),
 	}
 }
 
@@ -471,18 +471,18 @@ func parseCastSpell(raw json.RawMessage) (string, error) {
 
 func (w *World) narrative() string {
 	var b strings.Builder
-	elapsed := StartingLifespanDays - w.ledger.Days
+	elapsed := StartingHealthDays - w.ledger.Days
 	if elapsed < 0 {
 		elapsed = 0
 	}
 	power := AttackPower(w.ledger.Krone)
-	fmt.Fprintf(&b, "Day %d. You have %d %s of life remaining and %d krones. Your attack power is max(1, floor(krones/10)), currently %d.\n\n",
-		elapsed, w.ledger.Days, plural(w.ledger.Days, "day", "days"), w.ledger.Krone, power)
-	fmt.Fprintf(&b, "A posted foe has %d HP and deals %d damage each round to your %d HP. The tales speak of a %d-attack budget; your power comes from the krones you hold, which are never spent. Combat pays %d krones on a win and %d on a loss, and costs %d days.\n\n",
-		OpponentHP, OpponentDamage, AgentHP, AttackBudget, PayBattleWin, PayBattleLoss, CostBattle)
+	fmt.Fprintf(&b, "Day %d. You have %d health remaining (every day spent costs 1 health) and %d krones. Your attack power is max(1, floor(krones/10)), currently %d.\n\n",
+		elapsed, w.ledger.Days, w.ledger.Krone, power)
+	fmt.Fprintf(&b, "A posted foe has %d HP and deals %d damage each round to your %d stamina. The tales speak of a %d-attack budget; your power comes from the krones you hold, which are never spent. Combat pays %d krones on a win and %d on a loss, and costs %d days.\n\n",
+		OpponentHP, OpponentDamage, AgentStamina, AttackBudget, PayBattleWin, PayBattleLoss, CostBattle)
 
 	if w.isDone() {
-		b.WriteString("The ledger is closed. No days remain.\n")
+		b.WriteString("The ledger is closed. No health remains.\n")
 		return b.String()
 	}
 
@@ -522,13 +522,6 @@ func duelStory(balance int) (won bool, story string) {
 		rounds := (OpponentHP + power - 1) / power
 		return true, fmt.Sprintf("Your attack power %d fells the foe in %d rounds. You earn %d krones. %d days pass.", power, rounds, PayBattleWin, CostBattle)
 	}
-	rounds := (AgentHP + OpponentDamage - 1) / OpponentDamage
+	rounds := (AgentStamina + OpponentDamage - 1) / OpponentDamage
 	return false, fmt.Sprintf("Your attack power %d is too weak; after %d rounds you fall. The purse is unchanged. %d days pass.", power, rounds, CostBattle)
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }

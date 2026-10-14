@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	startLifespan  = 50
-	agentHP        = 50
+	startHealth    = 50
+	agentStamina   = 50
 	opponentHP     = 100
 	opponentDmg    = 8
 	pickupCost     = 1
@@ -28,7 +28,7 @@ const (
 // (attack power = max(1, floor(balance/10))) from the fiction.
 type Stub struct {
 	day           int
-	lifespan      int
+	health        int
 	balance       int
 	deliveryTaken bool
 	deliveryDone  bool
@@ -38,16 +38,16 @@ type Stub struct {
 
 // New returns a fresh stub run.
 func New() *Stub {
-	return &Stub{lifespan: startLifespan}
+	return &Stub{health: startHealth}
 }
 
 // Observe implements engine.Game.
 func (s *Stub) Observe() engine.State {
 	return engine.State{
-		Narrative:    s.narrative(),
-		Balance:      s.balance,
-		LifespanDays: s.lifespan,
-		Done:         s.over,
+		Narrative:  s.narrative(),
+		Balance:    s.balance,
+		HealthDays: s.health,
+		Done:       s.over,
 	}
 }
 
@@ -108,7 +108,7 @@ func (s *Stub) Apply(name string, args json.RawMessage) (engine.Outcome, error) 
 		s.fought = true
 		dmg := s.attack()
 		roundsToWin := ceilDiv(opponentHP, dmg)
-		roundsToDie := ceilDiv(agentHP, opponentDmg)
+		roundsToDie := ceilDiv(agentStamina, opponentDmg)
 		var msg string
 		if roundsToWin <= roundsToDie {
 			s.balance += fightPayout
@@ -136,25 +136,25 @@ func (s *Stub) attack() int {
 
 func (s *Stub) spend(days int) {
 	s.day += days
-	s.lifespan -= days
-	if s.lifespan <= 0 {
+	s.health -= days
+	if s.health <= 0 {
 		s.over = true
 	}
 }
 
 func (s *Stub) outcome(before int, msg string) engine.Outcome {
 	return engine.Outcome{
-		Narrative:    msg,
-		Balance:      s.balance,
-		LifespanDays: s.lifespan,
-		Earned:       s.balance - before,
-		Done:         s.over,
+		Narrative:  msg,
+		Balance:    s.balance,
+		HealthDays: s.health,
+		Earned:     s.balance - before,
+		Done:       s.over,
 	}
 }
 
 func (s *Stub) narrative() string {
 	var sb []string
-	sb = append(sb, fmt.Sprintf("Day %d. You have %d days of life remaining and %d krones.", s.day, s.lifespan, s.balance))
+	sb = append(sb, fmt.Sprintf("Day %d. You have %d health remaining (every day spent costs 1 health) and %d krones.", s.day, s.health, s.balance))
 	if !s.deliveryDone {
 		if s.deliveryTaken {
 			sb = append(sb, fmt.Sprintf("You carry the courier's package, worth %d krones if delivered.", deliveryPayout))
@@ -163,7 +163,7 @@ func (s *Stub) narrative() string {
 		}
 	}
 	if !s.fought {
-		sb = append(sb, fmt.Sprintf("A goblin warband (%d HP) blocks the bridge. Each round it deals %d damage to your %d HP. Your attack power is max(1, floor(krones/10)). Winning pays %d krones, losing costs %d.", opponentHP, opponentDmg, agentHP, fightPayout, engine.DuelLossPenalty))
+		sb = append(sb, fmt.Sprintf("A goblin warband (%d HP) blocks the bridge. Each round it deals %d damage to your %d stamina. Your attack power is max(1, floor(krones/10)). Winning pays %d krones, losing costs %d.", opponentHP, opponentDmg, agentStamina, fightPayout, engine.DuelLossPenalty))
 	}
 	return strings.Join(sb, " ")
 }

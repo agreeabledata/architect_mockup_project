@@ -159,10 +159,10 @@ function draw() {
   const tx = 60, tw = W - 120, ty = 130;
   ctx.fillStyle = '#8b90a0';
   ctx.font = '13px ui-monospace, monospace';
-  ctx.fillText('lifespan   day ' + f.day + ' / ' + SCENE.max_day, tx, ty - 14);
+  ctx.fillText('health   ' + Math.max(0, SCENE.max_day - f.day) + ' / ' + SCENE.max_day + '   (day ' + f.day + ')', tx, ty - 14);
   ctx.fillStyle = '#232635';
   ctx.fillRect(tx, ty - 6, tw, 12);
-  const prog = Math.min(1, f.day / SCENE.max_day);
+  const prog = Math.max(0, 1 - f.day / SCENE.max_day); // health drains as days pass
   ctx.fillStyle = '#3b6ea5';
   ctx.fillRect(tx, ty - 6, tw * prog, 12);
   const px = tx + tw * prog;

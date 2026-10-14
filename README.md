@@ -36,7 +36,7 @@ two small interfaces, so they proceed in parallel without blocking each other:
   rest land after the first end-to-end run works.
 - **No spending in v1** (#9): krones are both the score and the XP — combat power
   reads the raw balance, so earning is progression. Metric is final balance.
-- **The turn budget is the agent's lifespan** (#8): every action spends life from a
+- **The turn budget is the agent's health** (#8; called lifespan until #5): every action spends health from a
   fixed allotment. Cost table still to be set.
 
 **Milestones** (cadence: weekly touchpoints, code review every other Thursday):
@@ -85,7 +85,7 @@ transcript). A reply with no tool call is nudged ("call one of the tools") and
 spends a retry the same way; a decision that ends on prose is `no_action`, and a
 provider error with no tool call ends the run as `provider_error`. Each change to
 model inputs bumps `prompt_version` (windowed context → `v3`, the prose nudge →
-`v4`): transcripts from before a bump are **not comparable** to runs of the same
+`v4`, lifespan/HP renamed to health/stamina → `v5`): transcripts from before a bump are **not comparable** to runs of the same
 model and seed after it.
 
 Transcripts are JSONL with a `kind` on every line (`header`, `call`, `turn`).
@@ -108,7 +108,7 @@ and footnoted under the table. Compare writes per-run JSONL under `-transcripts`
 `engine_seed` is the world seed. `scripts/replay_visual` reads those same
 records through the same parser and writes one self-contained HTML file
 (`-out` to pick the path, default `<transcript>.html`) that animates the run
-with 2D shapes and text — a lifespan track, a balance meter, the current action
+with 2D shapes and text — a health track, a balance meter, the current action
 and its reasoning. The engine stays headless; open the file in a browser. It
 also replays the engine against the record and warns at the first turn where
 they disagree (a transcript from an older engine).
@@ -135,17 +135,20 @@ in the PR.
 
 ## Brainstorming
 
-### Run structure: lifespan as the resource
+### Run structure: health as the resource
 
 The eval is structured like an open-world RPG (think World of Warcraft / Skyrim
 questing): the agent receives quests, chooses which to pursue, and acts under a
-fixed **lifespan** (~50 turns, one turn = one in-game day). Framing the budget as
-the agent's life rather than a neutral turn counter makes the opportunity cost
-explicit — taking a quest spends life the agent cannot get back.
+fixed **health** (~50 turns, one turn = one in-game day, each day costs 1 health).
+Framing the budget as the agent's health rather than a neutral turn counter makes
+the opportunity cost explicit — taking a quest spends health the agent cannot get
+back. (Called lifespan until #5. Agreed at office hours 2026-09-24; the duel's
+hit points became **stamina** at the same time so the model never sees "health"
+and "HP" for two different 50s.)
 
-- Every action costs days of lifespan. **Settled (#8), and the numbers now live in
+- Every action costs days, and each day costs 1 health. **Settled (#8), and the numbers now live in
   `engine/balance.go` — that file is the only place the economy is defined:**
-  50 days of lifespan, starting balance 0. A battle costs 2 days; a delivery costs
+  50 health (days), starting balance 0. A battle costs 2 days; a delivery costs
   its distance, 2–4 days; an arcane ritual costs 3 days; drawing a fresh board of
   5 quests costs 1 day.
 - **Payouts (#8):** deliveries pay 60 / 70 / 100 for short / medium / long, so the
@@ -172,7 +175,7 @@ explicit — taking a quest spends life the agent cannot get back.
 ### Battle / combat mechanics (issue #1)
 
 - v1 spec ("Single Battle Rules — Coin-Powered", by mfeinLearn — see BATTLE.md on
-  the issue): a fixed-turn duel — agent 50 HP with a 10-attack budget vs. opponent
+  the issue): a fixed-turn duel — agent 50 HP (now stamina) with a 10-attack budget vs. opponent
   100 HP, opponent deals a flat 8 damage per round, agent attack power
   `max(1, floor(coins / 10))`. Fully deterministic, no randomness.
 - **Reframing (agreed 2026-08-20, spec author present):** the battle
@@ -183,8 +186,8 @@ explicit — taking a quest spends life the agent cannot get back.
   the fiction and fights only when it can win (or when the ROI beats other uses
   of those turns).
 - **Settled:** entry cost 2 days, win pays 120, a loss pays 0 (the wasted days are
-  the penalty — no negative payouts in v1). The agent observes its own balance, its
-  remaining lifespan, and the opponent's HP and damage; the win condition is
+  the penalty — no negative payouts in v1). The agent observes its own balance and
+  stamina, and the opponent's HP and damage; the win condition is
   derivable from those and nothing else. The 10-attack budget **stays in the quest
   prose as a deliberate distractor but is not implemented** — the agent dies or wins
   within 7 attacks at these numbers, so tracking it would be dead code.

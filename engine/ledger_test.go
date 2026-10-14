@@ -4,8 +4,8 @@ import "testing"
 
 func TestNewLedgerStart(t *testing.T) {
 	l := newLedger()
-	if l.Days != StartingLifespanDays {
-		t.Fatalf("days = %d, want %d", l.Days, StartingLifespanDays)
+	if l.Days != StartingHealthDays {
+		t.Fatalf("days = %d, want %d", l.Days, StartingHealthDays)
 	}
 	if l.Krone != StartingBalance {
 		t.Fatalf("krone = %d, want %d", l.Krone, StartingBalance)
@@ -14,7 +14,7 @@ func TestNewLedgerStart(t *testing.T) {
 
 func TestDebitDaysClampsAtZero(t *testing.T) {
 	l := newLedger()
-	l = l.debitDays(StartingLifespanDays+10, "travel", "overspend")
+	l = l.debitDays(StartingHealthDays+10, "travel", "overspend")
 	if l.Days != 0 {
 		t.Fatalf("days = %d, want 0", l.Days)
 	}

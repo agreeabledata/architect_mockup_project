@@ -312,8 +312,8 @@ func readScored(path string) (scoredRun, error) {
 	if !ok {
 		return scoredRun{}, fmt.Errorf("%s: no successful turn; move it under failed/", path)
 	}
-	if day != engine.StartingLifespanDays {
-		return scoredRun{}, fmt.Errorf("%s: last successful day is %d, want %d; move it under failed/", path, day, engine.StartingLifespanDays)
+	if day != engine.StartingHealthDays {
+		return scoredRun{}, fmt.Errorf("%s: last successful day is %d, want %d; move it under failed/", path, day, engine.StartingHealthDays)
 	}
 	st := log.Stats()
 	st.Reason = "terminal"

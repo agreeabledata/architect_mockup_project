@@ -13,7 +13,7 @@ import (
 const reasoningParam = "reasoning"
 
 // promptVersion hashes every run transcript to the prompt it used.
-const promptVersion = "v4"
+const promptVersion = "v5"
 
 // contextTurns is how many turns of the conversation reach the model: the
 // system prompt plus the last N turns. The fresh observation restates the
@@ -25,8 +25,8 @@ func BuildSystem() string {
 	return `You are an adventurer in a small fantasy world. Each turn you are told
 your situation and the actions available to you. Think briefly in free text about
 the arithmetic of your options, then call exactly one action tool. Every action
-spends days of your life, which you cannot get back. Spend them only where the
-payoff is worth it.`
+spends days, and every day spent costs 1 health, which you cannot get back. Spend
+it only where the payoff is worth it.`
 }
 
 // BuildTurn renders one observation plus its legal actions as a user message.
@@ -187,7 +187,7 @@ func (a *Agent) Run(ctx context.Context, g engine.Game) (Report, error) {
 	msgs := []Message{{Role: RoleSystem, Content: BuildSystem()}}
 	retryCap := a.Config.DecisionRetryCapOrDefault()
 	var report Report
-	startRemaining := g.Observe().LifespanDays
+	startRemaining := g.Observe().HealthDays
 decisions:
 	for {
 		if report.Iterations >= a.Config.IterationCap {
@@ -297,13 +297,13 @@ func newTurnRecord(turn, startRemaining int, before engine.State, action string,
 	if err != nil {
 		msg := err.Error()
 		rec.Error = &msg
-		rec.Day = startRemaining - before.LifespanDays
+		rec.Day = startRemaining - before.HealthDays
 		rec.Balance = before.Balance
 		return rec
 	}
-	rec.Day = startRemaining - outcome.LifespanDays
+	rec.Day = startRemaining - outcome.HealthDays
 	rec.Balance = outcome.Balance
 	rec.Earned = outcome.Earned
-	rec.DaysSpent = before.LifespanDays - outcome.LifespanDays
+	rec.DaysSpent = before.HealthDays - outcome.HealthDays
 	return rec
 }

@@ -22,8 +22,8 @@ type State struct {
 	Narrative string
 	// Balance is the agent's krone balance (the score in v1).
 	Balance int
-	// LifespanDays is how many days of life remain.
-	LifespanDays int
+	// HealthDays is the remaining health; each day spent costs 1.
+	HealthDays int
 	// Done reports whether the run has reached a terminal state.
 	Done bool
 }
@@ -34,8 +34,8 @@ type Outcome struct {
 	Narrative string
 	// Balance is the balance after the action.
 	Balance int
-	// LifespanDays is the remaining lifespan after the action.
-	LifespanDays int
+	// HealthDays is the remaining health after the action.
+	HealthDays int
 	// Earned is the change in balance from this action.
 	Earned int
 	// Done reports whether the action ended the run.
@@ -43,7 +43,7 @@ type Outcome struct {
 }
 
 // Game is the deterministic engine surface the harness drives. The engine owns
-// the lifespan ledger; the harness owns its own per-run model-call cap and a
+// the health ledger; the harness owns its own per-run model-call cap and a
 // small per-decision retry cap for cost control.
 type Game interface {
 	// Observe returns the current state the agent sees.

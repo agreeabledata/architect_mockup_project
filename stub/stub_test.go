@@ -24,13 +24,13 @@ func TestStubDelivery(t *testing.T) {
 	if out.Earned != deliveryPayout {
 		t.Errorf("earned = %d, want %d", out.Earned, deliveryPayout)
 	}
-	if s.Observe().LifespanDays != startLifespan-pickupCost-deliveryCost {
-		t.Errorf("lifespan = %d", s.Observe().LifespanDays)
+	if s.Observe().HealthDays != startHealth-pickupCost-deliveryCost {
+		t.Errorf("health = %d", s.Observe().HealthDays)
 	}
 }
 
 // The duel is the word problem: whether it wins must match the arithmetic the
-// narrative states (attack = max(1, floor(krones/10)), 50 HP vs 8 dmg/round).
+// narrative states (attack = max(1, floor(krones/10)), 50 stamina vs 8 dmg/round).
 func TestStubFightMath(t *testing.T) {
 	rich := New()
 	rich.balance = 150 // attack 15, kills in 7 rounds, dies in 7 -> wins

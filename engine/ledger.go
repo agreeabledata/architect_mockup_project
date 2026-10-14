@@ -1,6 +1,6 @@
 package engine
 
-// LedgerEvent is one line on the lifespan page.
+// LedgerEvent is one line on the health page.
 type LedgerEvent struct {
 	Kind  string
 	Days  int
@@ -8,8 +8,9 @@ type LedgerEvent struct {
 	Note  string
 }
 
-// Ledger is the agent's remaining life and krone purse. HP is not stored:
-// every duel is a fresh AgentHP vs OpponentHP (see WinsBattle).
+// Ledger is the agent's remaining health (days) and krone purse. Combat
+// stamina is not stored: every duel is a fresh AgentStamina vs OpponentHP (see
+// WinsBattle).
 type Ledger struct {
 	Days   int
 	Krone  int
@@ -18,10 +19,10 @@ type Ledger struct {
 
 func newLedger() Ledger {
 	return Ledger{
-		Days:  StartingLifespanDays,
+		Days:  StartingHealthDays,
 		Krone: StartingBalance,
 		Events: []LedgerEvent{{
-			Kind: "new", Days: StartingLifespanDays,
+			Kind: "new", Days: StartingHealthDays,
 			Note: "Ledger opened. Fifty days on the page.",
 		}},
 	}
