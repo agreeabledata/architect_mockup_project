@@ -325,3 +325,25 @@ cost          $0.0033
 reason        no_action
 transcript    transcripts/run_20260914T184721.600107000Z.jsonl
 ```
+
+## Credits
+
+Built by apprentices in the Flatiron Apprentices program, with mentorship from
+Agreeable Data. Line-level history is in `git blame` and the repo's Contributors graph.
+
+- **Max Kaya ([@maxpeterkaya](https://github.com/maxpeterkaya))**: model harness,
+  infrastructure and visualization. Wrote the initial harness (agent loop, Anthropic
+  and OpenAI-compatible providers, config, transcripts), the stub world and the
+  `run_agent` script. Added per-run call caps and windowed context, the Arcane
+  Dispersal quest type and its bot strategy, engine seed mixing and hardening
+  tests, the CI pipeline, and the visual replay of a run (HTML and Ebiten).
+- **Malcolm Fein ([@mfeinLearn](https://github.com/mfeinLearn))**: game engine,
+  plus harness additions. Implemented `engine.Game`, the decision-level quest
+  engine, and its scripted greedy bot (`run_bot`, the eval baseline), and wrote
+  the engine walkthrough that became `docs/engine.md`. Added the OpenRouter
+  provider, required reasoning on every tool call, structured per-turn
+  transcripts, transcript replay and the model comparison table.
+- **Davis Glen Ellis ([@davisglenellis](https://github.com/davisglenellis))**:
+  mentor and reviewer. Wrote the original design and implementation plan, ratified
+  the engine contract and v1 balance numbers, made battle outcomes come from
+  `WinsBattle`, and wired `run_agent` to the real engine.
